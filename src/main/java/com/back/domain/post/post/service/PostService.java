@@ -44,4 +44,12 @@ public class PostService {
         //   NullPointerException이 난다. 예외를 던지면 GlobalExceptionHandler 한 곳에서 404로 바꿀 수 있다.
         return postRepository.findById(id).orElseThrow();
     }
+
+    // 쓰기 메서드라 readOnly 없이 @Transactional. 메서드가 끝나면 커밋(예외가 나면 롤백)된다.
+    @Transactional
+    public Post write(String title, String content) {
+        // save()는 INSERT 후 id가 채워진 엔티티를 돌려준다(id 생성 전략이 IDENTITY라 INSERT 즉시 id를 안다).
+        //   createDate·modifyDate도 저장 직전에 JPA Auditing이 채운다.
+        return postRepository.save(new Post(title, content));
+    }
 }

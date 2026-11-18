@@ -51,6 +51,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     // Validation: @NotBlank, @Size 같은 애너테이션으로 요청 값을 검증한다 (Bean Validation, Hibernate Validator).
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // AOP(AspectJ 애너테이션 방식): @Aspect, @Around로 ResponseAspect를 만든다.
+    // 주의: Spring Boot 4부터 이름이 spring-boot-starter-aop → spring-boot-starter-aspectj로 바뀌었다.
+    //   aspectjweaver는 data-jpa를 통해 이미 딸려 오지만, 우리 코드가 직접 쓰는 기능이라 명시적으로 선언한다.
+    implementation("org.springframework.boot:spring-boot-starter-aspectj")
     // H2 콘솔: 브라우저에서 /h2-console로 DB 내용을 볼 수 있게 해 준다.
     // 주의: Boot 4에서는 H2 콘솔 자동 설정이 별도 모듈로 분리되어, 이 의존성이 없으면 콘솔이 안 뜬다.
     implementation("org.springframework.boot:spring-boot-h2console")

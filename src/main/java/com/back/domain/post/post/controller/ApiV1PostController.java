@@ -8,10 +8,16 @@ package com.back.domain.post.post.controller;
 //   기존 클라이언트(v1)를 깨지 않고 새 버전을 낼 수 있다(API 버저닝).
 
 import com.back.domain.post.post.dto.PostDto;
+import com.back.domain.post.post.dto.PostWriteReqBody;
+import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
+import com.back.global.rsData.RsData;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,5 +51,26 @@ public class ApiV1PostController {
     @GetMapping("/{id}")
     public PostDto getItem(@PathVariable long id) {
         return new PostDto(postService.findById(id));
+    }
+
+    // POST /api/v1/posts: 글 작성.
+    // @RequestBody: 요청 본문(JSON)을 Jackson이 PostWriteReqBody로 바꿔 준다.
+    //   주의: JSON이 깨져 있으면 이 변환 단계에서 HttpMessageNotReadableException이 나고, 메서드는 아예 실행되지 않는다.
+    // @Valid: 변환된 객체의 검증 애너테이션(@NotBlank, @Size)을 검사하라는 표시.
+    //   규칙을 어기면 MethodArgumentNotValidException이 나고, 역시 메서드 본문은 실행되지 않는다.
+    //   주의: @Valid를 빼면 애너테이션이 붙어 있어도 아무 검사도 하지 않는다(빈 제목이 그대로 저장된다).
+    // 두 예외 모두 GlobalExceptionHandler가 400 응답으로 바꾼다. 그래서 이 메서드는 "정상 흐름"만 쓴다.
+    //
+    // 반환 타입 RsData: ADR 0001에 따라 쓰기 응답은 RsData로 감싼다.
+    //   상태 코드 201(Created, "새 자원이 생겼다")은 여기서 정하지 않는다. ResponseAspect가 "201-1"을 보고 정한다.
+    @PostMapping
+    public RsData<PostDto> write(@RequestBody @Valid PostWriteReqBody reqBody) {
+        Post post = postService.write(reqBody.title(), reqBody.content());
+
+        return new RsData<>(
+                "201-1",
+                "%d번 글이 작성되었습니다.".formatted(post.getId()),
+                new PostDto(post)
+        );
     }
 }

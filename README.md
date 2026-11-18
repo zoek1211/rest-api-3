@@ -30,6 +30,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [001](https://github.com/zoek1211/rest-api-3/tree/001) | 글·댓글 엔티티와 샘플 데이터 |
 | [002](https://github.com/zoek1211/rest-api-3/tree/002) | 글 다건 조회 GET /api/v1/posts |
 | [003](https://github.com/zoek1211/rest-api-3/tree/003) | 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리 |
+| [004](https://github.com/zoek1211/rest-api-3/tree/004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
 
 ## 단계별 진행
 
@@ -158,3 +159,38 @@ mvc.perform(get("/api/v1/posts/999"))
 ```
 
 **배운 점**: `@PathVariable`로 URL 경로 값을 받는다 / `Optional.orElseThrow()`로 "없음"을 예외로 바꾸고 `@RestControllerAdvice` + `@ExceptionHandler`에서 한 번에 HTTP 응답으로 변환한다 / 처리기가 없으면 MockMvc에서는 예외가 `ServletException`으로 그대로 튀어나온다
+
+### 004: 글 작성 POST /api/v1/posts 와 입력값 검증  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/004)
+
+**무엇을 했나**: 정상 작성(201, `"201-1"`, `"4번 글이 작성되었습니다."`, data 전체 필드, 다시 다건 조회하면 4개), 빈 제목·빈 본문(400 `"400-1"`), 깨진 JSON(400 `"400-2"`) 테스트를 하나씩 먼저 써서 실패를 확인하고 통과시켰습니다. 요청 DTO `PostWriteReqBody`(`@NotBlank`, `@Size`)와 `@Valid`로 입력을 검증하고, `ResponseAspect`가 `RsData.resultCode` 앞자리로 HTTP 상태를 정하게 해서 404 처리기도 `ResponseEntity` 없이 `RsData`만 반환하도록 정리했습니다.
+**왜**: 상태 코드를 컨트롤러마다 `ResponseEntity`로 적으면 `resultCode`와 실제 상태가 두 군데에서 따로 관리되어 어긋날 수 있습니다(ADR 0001). AOP로 한 곳에서 정하면 컨트롤러는 "무슨 결과인지"만 말합니다. 검증·JSON 오류는 컨트롤러 본문까지 오지 않고 예외로 끝나므로 전역 처리기에서 400으로 바꿉니다.
+**핵심 코드**
+
+```java
+// ResponseAspect.java: RsData를 반환하는 컨트롤러·예외 처리기 메서드를 감싼다
+@Around("execution(public com.back.global.rsData.RsData *(..)) && (within(@...RestController *) || within(@...RestControllerAdvice *))")
+public Object setStatusFromResultCode(ProceedingJoinPoint joinPoint) throws Throwable {
+    Object result = joinPoint.proceed();
+    if (result instanceof RsData<?> rsData) {
+        HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getResponse();
+        response.setStatus(rsData.statusCode()); // "201-1" → 201
+    }
+    return result;
+}
+
+// ApiV1PostController.java
+@PostMapping
+public RsData<PostDto> write(@RequestBody @Valid PostWriteReqBody reqBody) {
+    Post post = postService.write(reqBody.title(), reqBody.content());
+    return new RsData<>("201-1", "%d번 글이 작성되었습니다.".formatted(post.getId()), new PostDto(post));
+}
+
+// GlobalExceptionHandler.java: "필드명-규칙-메시지" 줄을 정렬해 잇는다
+String msg = e.getBindingResult().getFieldErrors().stream()
+        .map(fe -> fe.getField() + "-" + fe.getCode() + "-" + fe.getDefaultMessage())
+        .sorted()
+        .collect(Collectors.joining("\n"));
+return new RsData<>("400-1", msg);
+```
+
+**배운 점**: AOP(`@Aspect` + `@Around`)는 Bean을 프록시로 감싸 여러 메서드에 공통 동작을 끼워 넣는다(Boot 4 스타터 이름은 `spring-boot-starter-aspectj`) / `@Valid`가 있어야 요청 DTO의 검증 애너테이션이 동작하고, 실패하면 `MethodArgumentNotValidException`이 난다 / JSON 변환 실패(`HttpMessageNotReadableException`)는 검증보다 앞 단계라 코드를 나눠(400-2) 구분한다

@@ -36,6 +36,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [007](https://github.com/zoek1211/rest-api-3/tree/007) | 댓글 다건 조회 GET /api/v1/posts/{postId}/comments |
 | [008](https://github.com/zoek1211/rest-api-3/tree/008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
 | [009](https://github.com/zoek1211/rest-api-3/tree/009) | 댓글 작성 POST /api/v1/posts/{postId}/comments |
+| [010](https://github.com/zoek1211/rest-api-3/tree/010) | 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id} |
 
 ## 단계별 진행
 
@@ -343,3 +344,31 @@ public RsData<PostCommentDto> write(@PathVariable long postId,
 ```
 
 **배운 점**: cascade PERSIST로 저장되는 엔티티는 flush 전까지 INSERT되지 않는다 / IDENTITY 전략의 id는 INSERT 직후에야 생긴다 → 응답에 id가 필요하면 `flush()` / 하위 자원의 소속(`postId`)은 본문이 아니라 경로로 받는다
+
+### 010: 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/010)
+
+**무엇을 했나**: 1번 글의 1번 댓글을 수정하면 200·`"200-1"`·`"1번 댓글이 수정되었습니다."`·`data: null`이 오고, 다시 단건 조회하면 바뀐 본문과 갱신된 `modifyDate`가 보인다는 테스트를 먼저 써서 실패(핸들러 없음)를 확인한 뒤, `PostCommentModifyReqBody`, `PostComment.modify`, `PostService.modifyComment`, `ApiV1PostCommentController.modify`로 통과시켰습니다. 빈 본문 400(`"400-1"`)과 다른 글의 댓글 404(그 댓글은 그대로) 테스트도 추가했습니다.
+**왜**: 댓글 찾기는 단건 조회의 `findCommentById`(글의 댓글 목록 안에서 찾기)를 재사용해 소속 검사를 따로 쓰지 않아도 되게 했습니다. 저장은 글 수정과 같이 변경 감지에 맡기고, `@Transactional` 테스트에서도 `modifyDate`가 갱신되어 보이도록 `flush()`로 UPDATE를 앞당깁니다.
+**핵심 코드**
+
+```java
+// PostService.java
+@Transactional
+public void modifyComment(long postId, long id, String content) {
+    // 글의 댓글 중에서 찾는다 → 없는 글·없는 댓글·다른 글의 댓글 모두 404
+    PostComment comment = findCommentById(postId, id);
+
+    comment.modify(content);   // 값만 바꾼다. save() 없이 변경 감지가 UPDATE
+    postRepository.flush();    // 지금 UPDATE → @LastModifiedDate 갱신
+}
+
+// ApiV1PostCommentController.java
+@PutMapping("/{id}")
+public RsData<Void> modify(@PathVariable long postId, @PathVariable long id,
+                           @RequestBody @Valid PostCommentModifyReqBody reqBody) {
+    postService.modifyComment(postId, id, reqBody.content());
+    return new RsData<>("200-1", "%d번 댓글이 수정되었습니다.".formatted(id));
+}
+```
+
+**배운 점**: 변경 감지는 cascade 대상인 하위 엔티티(댓글)에도 똑같이 동작한다 / 같은 클래스 안의 `this.method()` 호출은 프록시를 거치지 않아 그 메서드의 `@Transactional(readOnly = true)`가 적용되지 않는다 / 작성과 수정은 규칙이 같아도 요청 DTO를 나눈다

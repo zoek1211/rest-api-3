@@ -34,4 +34,11 @@ public class PostComment extends BaseEntity {
         this.post = post;
         this.content = content;
     }
+
+    // 댓글 본문 수정. setter 대신 "수정"이라는 의도가 드러나는 메서드를 둔다(Post.modify와 같은 이유).
+    // 소속 글(post)은 바꿀 수 없다: 댓글을 다른 글로 옮기는 기능은 없다.
+    // 주의: 값만 바꾸고 저장은 하지 않는다. 트랜잭션 안의 변경 감지가 UPDATE를 만든다(PostService.modifyComment 주석).
+    public void modify(String content) {
+        this.content = content;
+    }
 }

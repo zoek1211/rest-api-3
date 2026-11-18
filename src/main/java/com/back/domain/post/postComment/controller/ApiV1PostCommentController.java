@@ -10,6 +10,7 @@ package com.back.domain.post.postComment.controller;
 
 import com.back.domain.post.post.service.PostService;
 import com.back.domain.post.postComment.dto.PostCommentDto;
+import com.back.domain.post.postComment.dto.PostCommentModifyReqBody;
 import com.back.domain.post.postComment.dto.PostCommentWriteReqBody;
 import com.back.domain.post.postComment.entity.PostComment;
 import com.back.global.rsData.RsData;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -68,6 +70,25 @@ public class ApiV1PostCommentController {
                 "201-1",
                 "%d번 댓글이 작성되었습니다.".formatted(comment.getId()),
                 new PostCommentDto(comment)
+        );
+    }
+
+    // PUT /api/v1/posts/{postId}/comments/{id}: 댓글 수정.
+    // 글 수정(ApiV1PostController.modify)과 같은 틀이다:
+    //   - PUT: 자원(댓글)을 보낸 내용으로 바꾼다. 바꿀 수 있는 필드가 content 하나뿐이라 PATCH와의 차이는 거의 없다.
+    //   - @Valid 검증 실패 → 400("400-1"), 없는 글·댓글·다른 글의 댓글 → 404("404-1").
+    //   - 성공 응답의 data는 null(RsData<Void>). 바뀐 댓글이 필요하면 클라이언트가 단건 조회로 다시 읽는다.
+    @PutMapping("/{id}")
+    public RsData<Void> modify(
+            @PathVariable long postId,
+            @PathVariable long id,
+            @RequestBody @Valid PostCommentModifyReqBody reqBody
+    ) {
+        postService.modifyComment(postId, id, reqBody.content());
+
+        return new RsData<>(
+                "200-1",
+                "%d번 댓글이 수정되었습니다.".formatted(id)
         );
     }
 }

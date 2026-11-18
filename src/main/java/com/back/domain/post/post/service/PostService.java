@@ -144,6 +144,25 @@ public class PostService {
         postRepository.flush();
     }
 
+    // 댓글 수정. 없는 글·없는 댓글·다른 글의 댓글은 모두 NoSuchElementException → 404("404-1").
+    @Transactional
+    public void modifyComment(long postId, long id, String content) {
+        // 단건 조회와 같은 findCommentById로 찾는다. "글의 댓글 목록 안에서" 찾으므로 소속 검사가 저절로 된다.
+        //   그래서 /posts/1/comments/4(4번은 2번 글의 댓글)를 수정하려 하면 404이고, 2번 글의 댓글은 바뀌지 않는다.
+        // 주의: findCommentById에는 @Transactional(readOnly = true)가 붙어 있지만, 같은 클래스 안에서 this로 부르면
+        //   프록시를 거치지 않아 그 애너테이션은 적용되지 않는다(Spring AOP 프록시의 "자기 호출" 한계).
+        //   그래서 이 메서드의 쓰기 트랜잭션 안에서 실행되고, 찾은 댓글은 변경 감지 대상인 영속 상태다.
+        PostComment comment = findCommentById(postId, id);
+
+        // 글 수정과 같다: 값만 바꾸면 변경 감지가 UPDATE를 만든다. save()를 부르지 않는다.
+        comment.modify(content);
+
+        // flush(): 글 수정(modify)과 같은 이유. 바깥 트랜잭션(@Transactional 테스트)이 있어도
+        //   UPDATE와 @LastModifiedDate 갱신을 지금 실행해서, 이어지는 단건 조회가 새 modifyDate를 보게 한다.
+        //   댓글은 글의 cascade 대상이지만 flush는 영속성 컨텍스트 전체를 대상으로 하므로, 글 저장소로 flush해도 된다.
+        postRepository.flush();
+    }
+
     // 글 삭제. 없는 글이면 NoSuchElementException → GlobalExceptionHandler가 404로 바꾼다.
     @Transactional
     public void delete(long id) {

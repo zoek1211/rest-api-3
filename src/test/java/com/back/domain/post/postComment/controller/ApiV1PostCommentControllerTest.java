@@ -24,9 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.handler;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -266,5 +268,112 @@ class ApiV1PostCommentControllerTest {
                 .andExpect(jsonPath("$.resultCode").value("404-1"))
                 .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
                 .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("댓글 수정: 200 \"200-1\", data는 null. 다시 조회하면 본문이 바뀌고 modifyDate가 갱신되어 있다")
+    void modify() throws Exception {
+        // 0. 준비: 수정 전 modifyDate를 HTTP로 읽어 둔다(DB를 직접 보지 않는다). 수정 후 값과 비교하기 위해서다.
+        //   글 수정 테스트(ApiV1PostControllerTest.modify)와 같은 패턴이다.
+        String oldModifyDate = JsonPath.read(
+                mvc.perform(get("/api/v1/posts/1/comments/1"))
+                        .andReturn().getResponse().getContentAsString(),
+                "$.modifyDate"
+        );
+
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/1/comments/1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "content": "수정된 댓글"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        // 수정 응답은 바뀐 댓글을 돌려주지 않는다(data: null). 필요하면 클라이언트가 단건 조회로 다시 읽는다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.msg").value("1번 댓글이 수정되었습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+
+        // 3. 다시 조회: 바뀐 본문과 갱신된 modifyDate가 보여야 한다.
+        mvc
+                .perform(get("/api/v1/posts/1/comments/1"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.postId").value(1))
+                .andExpect(jsonPath("$.content").value("수정된 댓글"))
+                .andExpect(jsonPath("$.modifyDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.modifyDate").value(not(oldModifyDate)));
+    }
+
+    @Test
+    @DisplayName("댓글 수정: 본문이 비었으면 400 \"400-1\" (규칙은 작성과 같다)")
+    void modify_blankContent() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/1/comments/1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "content": ""
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.resultCode").value("400-1"))
+                .andExpect(jsonPath("$.msg").value("""
+                        content-NotBlank-must not be blank
+                        content-Size-size must be between 2 and 100""".stripIndent()))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("댓글 수정: 다른 글의 댓글이면 404이고, 그 댓글은 바뀌지 않는다")
+    void modify_commentOfOtherPost() throws Exception {
+        // 1. 요청 보내기: 4번 댓글은 2번 글의 댓글이다(샘플 데이터). 1번 글의 주소로 수정을 시도한다.
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/1/comments/4")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "content": "남의 글 댓글 수정"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+
+        // 3. 다시 조회: 2번 글의 주소로 읽으면 4번 댓글의 본문은 그대로다.
+        mvc
+                .perform(get("/api/v1/posts/2/comments/4"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value(not("남의 글 댓글 수정")));
     }
 }

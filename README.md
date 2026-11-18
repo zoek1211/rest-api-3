@@ -35,6 +35,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [006](https://github.com/zoek1211/rest-api-3/tree/006) | 글 삭제 DELETE /api/v1/posts/{id} |
 | [007](https://github.com/zoek1211/rest-api-3/tree/007) | 댓글 다건 조회 GET /api/v1/posts/{postId}/comments |
 | [008](https://github.com/zoek1211/rest-api-3/tree/008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
+| [009](https://github.com/zoek1211/rest-api-3/tree/009) | 댓글 작성 POST /api/v1/posts/{postId}/comments |
 
 ## 단계별 진행
 
@@ -312,3 +313,33 @@ public PostCommentDto getItem(@PathVariable long postId, @PathVariable long id) 
 ```
 
 **배운 점**: 중첩 자원의 단건 조회는 "부모에 속하는지"까지 확인해야 한다 / 부모에서 자식을 꺼내는 구조로 만들면 소속 검사가 저절로 된다 / 클래스 수준 경로 변수와 메서드 수준 경로 변수를 함께 `@PathVariable`로 받는다
+
+### 009: 댓글 작성 POST /api/v1/posts/{postId}/comments  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/009)
+
+**무엇을 했나**: 1번 글에 댓글을 쓰면 201·`"201-1"`·`"N번 댓글이 작성되었습니다."`와 새 댓글(`PostCommentDto`, 필드 5개)이 오고, 다시 조회하면 1번 글의 댓글이 4개라는 테스트를 먼저 써서 실패(핸들러 없음)를 확인한 뒤, `PostCommentWriteReqBody`(본문 2–100자, `@NotBlank`), `PostService.writeComment`, `ApiV1PostCommentController.write`로 통과시켰습니다. 빈 본문 400(`"400-1"`)과 없는 글 404 테스트도 함께 통과합니다.
+**왜**: 댓글은 `post.addComment()`로 글의 컬렉션에 넣기만 하면 cascade PERSIST로 저장되지만, INSERT는 flush 때(보통 커밋 직전) 나갑니다. id는 IDENTITY(auto_increment)라 INSERT 전에는 `null`이어서, 응답에 id를 담으려면 서비스에서 `flush()`로 INSERT를 앞당겨야 합니다(레퍼런스 056강의 flush 이슈). 실제로 `flush()`를 빼면 테스트가 `$.data.id`가 `null`이라며 실패합니다.
+**핵심 코드**
+
+```java
+// PostService.java
+@Transactional
+public PostComment writeComment(long postId, String content) {
+    Post post = postRepository.findById(postId).orElseThrow(); // 없는 글 → 404
+
+    PostComment comment = post.addComment(content); // cascade PERSIST: save() 없이 flush 때 INSERT
+    // 아직 comment.getId() == null. INSERT가 나가야 IDENTITY id가 정해진다.
+    postRepository.flush();                         // 지금 INSERT → id·생성일 채워짐
+
+    return comment;
+}
+
+// ApiV1PostCommentController.java
+@PostMapping
+public RsData<PostCommentDto> write(@PathVariable long postId,
+                                    @RequestBody @Valid PostCommentWriteReqBody reqBody) {
+    PostComment comment = postService.writeComment(postId, reqBody.content());
+    return new RsData<>("201-1", "%d번 댓글이 작성되었습니다.".formatted(comment.getId()), new PostCommentDto(comment));
+}
+```
+
+**배운 점**: cascade PERSIST로 저장되는 엔티티는 flush 전까지 INSERT되지 않는다 / IDENTITY 전략의 id는 INSERT 직후에야 생긴다 → 응답에 id가 필요하면 `flush()` / 하위 자원의 소속(`postId`)은 본문이 아니라 경로로 받는다

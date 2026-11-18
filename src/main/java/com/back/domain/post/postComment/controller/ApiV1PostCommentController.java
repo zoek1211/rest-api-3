@@ -10,9 +10,15 @@ package com.back.domain.post.postComment.controller;
 
 import com.back.domain.post.post.service.PostService;
 import com.back.domain.post.postComment.dto.PostCommentDto;
+import com.back.domain.post.postComment.dto.PostCommentWriteReqBody;
+import com.back.domain.post.postComment.entity.PostComment;
+import com.back.global.rsData.RsData;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,5 +49,25 @@ public class ApiV1PostCommentController {
     @GetMapping("/{id}")
     public PostCommentDto getItem(@PathVariable long postId, @PathVariable long id) {
         return new PostCommentDto(postService.findCommentById(postId, id));
+    }
+
+    // POST /api/v1/posts/{postId}/comments: 댓글 작성.
+    // 글 작성(ApiV1PostController.write)과 같은 틀이다:
+    //   - @RequestBody + @Valid: 본문 검증 실패는 메서드 실행 전에 400("400-1")으로 끝난다.
+    //   - 없는 글은 서비스가 NoSuchElementException → 404("404-1").
+    //   - 반환은 RsData(ADR 0001). 201 상태 코드는 ResponseAspect가 "201-1"을 보고 정한다.
+    @PostMapping
+    public RsData<PostCommentDto> write(
+            @PathVariable long postId,
+            @RequestBody @Valid PostCommentWriteReqBody reqBody
+    ) {
+        // 서비스가 flush()까지 해 두었으므로 여기서 comment.getId()는 이미 채워져 있다(PostService.writeComment 주석).
+        PostComment comment = postService.writeComment(postId, reqBody.content());
+
+        return new RsData<>(
+                "201-1",
+                "%d번 댓글이 작성되었습니다.".formatted(comment.getId()),
+                new PostCommentDto(comment)
+        );
     }
 }

@@ -84,6 +84,31 @@ public class PostService {
                 .orElseThrow();
     }
 
+    // 글에 댓글 작성. 없는 글이면 NoSuchElementException → GlobalExceptionHandler가 404로 바꾼다.
+    @Transactional
+    public PostComment writeComment(long postId, String content) {
+        Post post = postRepository.findById(postId).orElseThrow();
+
+        // 댓글 저장소의 save()를 부르지 않는다. Post.comments의 cascade PERSIST 덕분에,
+        //   영속 상태인 글의 comments에 넣기만 하면 flush 때 댓글도 함께 INSERT된다.
+        // addComment()가 양방향 관계(comment.post 설정 + 리스트에 추가)를 한 번에 맞춰 준다.
+        PostComment comment = post.addComment(content);
+
+        // 주의: 이 시점의 comment.getId()는 아직 null이다.
+        //   cascade PERSIST는 "언젠가 flush될 때" 댓글을 INSERT한다. 보통은 트랜잭션 커밋 직전이다.
+        //   id는 IDENTITY 전략(DB auto_increment)이라 INSERT가 실행되어야 비로소 정해진다.
+        //   그런데 컨트롤러는 응답("N번 댓글이 작성되었습니다.", data.id)을 만들 때 id가 필요하다.
+        //   게다가 테스트처럼 바깥 트랜잭션이 있으면 이 메서드가 끝나도 커밋되지 않아, 응답을 만들 때까지 INSERT가 안 나간다.
+        // 그래서 flush(): 쌓인 변경(새 댓글 INSERT)을 지금 DB로 보낸다. INSERT 직후 id가 엔티티에 채워지고,
+        //   createDate·modifyDate도 저장 직전에 JPA Auditing이 채운다. (레퍼런스 056강의 flush() 이슈)
+        // 대안: postRepository.save(post)는 이미 영속 상태인 글에는 아무 SQL도 내지 않아 해결책이 아니다.
+        //   PostCommentRepository.save(comment)라면 IDENTITY라 즉시 INSERT되어 id가 나오지만, 댓글 저장소가 아직 없다.
+        // 주의: flush는 커밋이 아니다. 이후 예외가 나면 INSERT도 함께 롤백된다.
+        postRepository.flush();
+
+        return comment;
+    }
+
     // 쓰기 메서드라 readOnly 없이 @Transactional. 메서드가 끝나면 커밋(예외가 나면 롤백)된다.
     @Transactional
     public Post write(String title, String content) {

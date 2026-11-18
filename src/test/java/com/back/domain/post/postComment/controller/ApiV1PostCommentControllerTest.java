@@ -9,10 +9,12 @@ package com.back.domain.post.postComment.controller;
 //
 // 전제: 샘플 데이터(BaseInitData). 1번 글에 댓글 1·2·3, 2번 글에 댓글 4·5, 3번 글은 댓글 없음.
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 // 주의: Boot 4에서 @AutoConfigureMockMvc의 패키지가 바뀌었다.
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
@@ -20,9 +22,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.handler;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -163,5 +167,104 @@ class ApiV1PostCommentControllerTest {
     @DisplayName("댓글 단건 조회: 없는 글이면 404")
     void getItem_postNotFound() throws Exception {
         expectGetItemNotFound("/api/v1/posts/%d/comments/1".formatted(Integer.MAX_VALUE));
+    }
+
+    @Test
+    @DisplayName("댓글 작성: 201 \"201-1\", data는 새 댓글(PostCommentDto). 다시 조회하면 1번 글의 댓글이 4개다")
+    void write() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(
+                        post("/api/v1/posts/1/comments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "content": "새 댓글"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        // ADR 0001: 쓰기 응답은 RsData로 감싼다. 상태 코드는 resultCode 앞 3자리(201)와 같다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("write"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.resultCode").value("201-1"))
+                .andExpect(jsonPath("$.length()").value(3))
+                // 새 댓글의 id는 샘플 댓글(1–5)보다 크다. 정확한 값은 고정하지 않는다:
+                //   auto_increment 값은 롤백되어도 되돌아가지 않아서, 다른 테스트가 먼저 댓글을 쓰면 번호가 밀린다.
+                .andExpect(jsonPath("$.data.id").value(greaterThan(5)))
+                .andExpect(jsonPath("$.data.createDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.data.modifyDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.data.postId").value(1))
+                .andExpect(jsonPath("$.data.content").value("새 댓글"))
+                .andExpect(jsonPath("$.data.length()").value(5));
+
+        // msg의 N은 응답에 담긴 새 댓글 id와 같아야 한다.
+        int id = JsonPath.read(resultActions.andReturn().getResponse().getContentAsString(), "$.data.id");
+        resultActions.andExpect(jsonPath("$.msg").value("%d번 댓글이 작성되었습니다.".formatted(id)));
+
+        // 3. 다시 조회: 정말 저장되었는지 HTTP로 확인한다(DB를 직접 보지 않는다).
+        //   1번 글의 댓글은 샘플 3개 + 새 댓글 1개 = 4개이고, 최신순이라 새 댓글이 맨 앞이다.
+        mvc
+                .perform(get("/api/v1/posts/1/comments"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(4))
+                .andExpect(jsonPath("$[0].id").value(id))
+                .andExpect(jsonPath("$[0].content").value("새 댓글"));
+    }
+
+    @Test
+    @DisplayName("댓글 작성: 본문이 비었으면 400 \"400-1\"")
+    void write_blankContent() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(
+                        post("/api/v1/posts/1/comments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "content": ""
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        // 빈 문자열 ""은 @NotBlank와 @Size(min = 2)를 둘 다 어긴다 → 두 줄 (글 작성과 같은 형식).
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("write"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.resultCode").value("400-1"))
+                .andExpect(jsonPath("$.msg").value("""
+                        content-NotBlank-must not be blank
+                        content-Size-size must be between 2 and 100""".stripIndent()))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("댓글 작성: 없는 글이면 404")
+    void write_postNotFound() throws Exception {
+        mvc
+                .perform(
+                        post("/api/v1/posts/%d/comments".formatted(Integer.MAX_VALUE))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "content": "새 댓글"
+                                        }
+                                        """)
+                )
+                .andDo(print())
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("write"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
     }
 }

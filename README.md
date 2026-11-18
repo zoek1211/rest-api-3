@@ -26,21 +26,24 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 
 | 태그 | 내용 |
 |---|---|
-| [000](https://github.com/zoek1211/rest-api-3/tree/000) | 프로젝트 뼈대와 설정 문서 |
-| [001](https://github.com/zoek1211/rest-api-3/tree/001) | 글·댓글 엔티티와 샘플 데이터 |
-| [002](https://github.com/zoek1211/rest-api-3/tree/002) | 글 다건 조회 GET /api/v1/posts |
-| [003](https://github.com/zoek1211/rest-api-3/tree/003) | 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리 |
-| [004](https://github.com/zoek1211/rest-api-3/tree/004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
-| [005](https://github.com/zoek1211/rest-api-3/tree/005) | 글 수정 PUT /api/v1/posts/{id} |
-| [006](https://github.com/zoek1211/rest-api-3/tree/006) | 글 삭제 DELETE /api/v1/posts/{id} |
-| [007](https://github.com/zoek1211/rest-api-3/tree/007) | 댓글 다건 조회 GET /api/v1/posts/{postId}/comments |
-| [008](https://github.com/zoek1211/rest-api-3/tree/008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
-| [009](https://github.com/zoek1211/rest-api-3/tree/009) | 댓글 작성 POST /api/v1/posts/{postId}/comments |
-| [010](https://github.com/zoek1211/rest-api-3/tree/010) | 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id} |
-| [011](https://github.com/zoek1211/rest-api-3/tree/011) | 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} |
-| [012](https://github.com/zoek1211/rest-api-3/tree/012) | 코드 리뷰 반영 |
+| [000](#step-000) | 프로젝트 뼈대와 설정 문서 |
+| [001](#step-001) | 글·댓글 엔티티와 샘플 데이터 |
+| [002](#step-002) | 글 다건 조회 GET /api/v1/posts |
+| [003](#step-003) | 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리 |
+| [004](#step-004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
+| [005](#step-005) | 글 수정 PUT /api/v1/posts/{id} |
+| [006](#step-006) | 글 삭제 DELETE /api/v1/posts/{id} |
+| [007](#step-007) | 댓글 다건 조회 GET /api/v1/posts/{postId}/comments |
+| [008](#step-008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
+| [009](#step-009) | 댓글 작성 POST /api/v1/posts/{postId}/comments |
+| [010](#step-010) | 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id} |
+| [011](#step-011) | 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} |
+| [012](#step-012) | 코드 리뷰 반영 |
+| [013](#step-013) | README 목차를 단계 설명으로 연결 |
 
 ## 단계별 진행
+
+<a id="step-000"></a>
 
 ### 000: 프로젝트 뼈대와 설정 문서  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/000)
 
@@ -69,6 +72,8 @@ spring:
 ```
 
 **배운 점**: Gradle toolchain + foojay로 JDK 버전을 빌드에 고정하기 / Spring 프로필로 환경별 설정 덮어쓰기 / `@SpringBootTest`는 `@SpringBootConfiguration`을 패키지 위쪽으로 찾아 올라간다(그래서 Application 클래스는 최상위 패키지에)
+
+<a id="step-001"></a>
 
 ### 001: 글·댓글 엔티티와 샘플 데이터  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/001)
 
@@ -100,6 +105,8 @@ public void run(ApplicationArguments args) {
 ```
 
 **배운 점**: 양방향 연관관계와 연관관계의 주인(`mappedBy`) / JPA Auditing은 `@EntityListeners` + `@EnableJpaAuditing` 둘 다 있어야 하고, 빠지면 에러 없이 null이 저장된다 / `ApplicationRunner`는 `@SpringBootTest` 컨텍스트에서도 실행된다
+
+<a id="step-002"></a>
 
 ### 002: 글 다건 조회 GET /api/v1/posts  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/002)
 
@@ -136,6 +143,8 @@ for (int i = 0; i < 3; i++) {
 
 **배운 점**: MockMvc는 서버 없이 DispatcherServlet에 요청을 넣어 HTTP 경계 전체를 검증한다 / DTO(record)로 API 계약과 엔티티 구조를 분리한다 / 테스트의 `@Transactional`은 끝나면 롤백해 테스트끼리 DB를 공유해도 서로 영향이 없다
 
+<a id="step-003"></a>
+
 ### 003: 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/003)
 
 **무엇을 했나**: `GET /posts/1`(200, 모든 필드)과 `GET /posts/999`(404) 테스트를 먼저 써서 실패를 확인했습니다(매핑 없음 → `ResourceHttpRequestHandler`, 예외 처리기 없음 → `ServletException`으로 터짐). `getItem` + `PostService.findById`(`orElseThrow()`)로 성공 케이스를, 공통 응답 봉투 `RsData{resultCode, msg, data}`와 `GlobalExceptionHandler`로 404 케이스를 통과시켰습니다.
@@ -167,6 +176,8 @@ mvc.perform(get("/api/v1/posts/999"))
 ```
 
 **배운 점**: `@PathVariable`로 URL 경로 값을 받는다 / `Optional.orElseThrow()`로 "없음"을 예외로 바꾸고 `@RestControllerAdvice` + `@ExceptionHandler`에서 한 번에 HTTP 응답으로 변환한다 / 처리기가 없으면 MockMvc에서는 예외가 `ServletException`으로 그대로 튀어나온다
+
+<a id="step-004"></a>
 
 ### 004: 글 작성 POST /api/v1/posts 와 입력값 검증  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/004)
 
@@ -203,6 +214,8 @@ return new RsData<>("400-1", msg);
 
 **배운 점**: AOP(`@Aspect` + `@Around`)는 Bean을 프록시로 감싸 여러 메서드에 공통 동작을 끼워 넣는다(Boot 4 스타터 이름은 `spring-boot-starter-aspectj`) / `@Valid`가 있어야 요청 DTO의 검증 애너테이션이 동작하고, 실패하면 `MethodArgumentNotValidException`이 난다 / JSON 변환 실패(`HttpMessageNotReadableException`)는 검증보다 앞 단계라 코드를 나눠(400-2) 구분한다
 
+<a id="step-005"></a>
+
 ### 005: 글 수정 PUT /api/v1/posts/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/005)
 
 **무엇을 했나**: 정상 수정(200, `"200-1"`, `"1번 글이 수정되었습니다."`, `data: null`, 다시 단건 조회하면 제목·본문이 바뀌고 `modifyDate`가 수정 전과 다름) 테스트를 먼저 써서 실패(핸들러 없음)를 확인하고 통과시켰습니다. 없는 글(404 `"404-1"`)과 빈 제목(400 `"400-1"`, 글은 그대로) 테스트도 추가했는데, 기존 `GlobalExceptionHandler`가 이미 처리해 처음부터 통과했습니다. 요청 DTO는 작성과 같은 규칙의 `PostModifyReqBody`를 따로 두었습니다.
@@ -230,6 +243,8 @@ public RsData<Void> modify(@PathVariable long id, @RequestBody @Valid PostModify
 
 **배운 점**: 영속성 컨텍스트에 있는 엔티티는 값만 바꾸면 flush 시점에 스냅샷과 비교해 UPDATE가 자동으로 나간다(dirty checking, `readOnly` 트랜잭션에서는 안 된다) / `@LastModifiedDate`는 flush 때 채워지므로 커밋이 미뤄지면 응답에 옛 수정일이 보일 수 있다 / PUT은 자원 전체를 바꾸는 요청이라 모든 필드가 필수다
 
+<a id="step-006"></a>
+
 ### 006: 글 삭제 DELETE /api/v1/posts/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/006)
 
 **무엇을 했나**: 댓글 3개가 달린 1번 글을 삭제하면 200(`"200-1"`, `"1번 글이 삭제되었습니다."`, `data: null`)이고 이후 단건 조회는 404라는 테스트와, 없는 글 삭제는 404라는 테스트를 먼저 써서 실패(핸들러 없음)를 확인하고 통과시켰습니다. 서비스는 글을 찾은 뒤(`orElseThrow`, 없으면 404) `delete` + `flush()`합니다.
@@ -256,6 +271,8 @@ public RsData<Void> delete(@PathVariable long id) {
 ```
 
 **배운 점**: `cascade = REMOVE`가 있으면 부모를 지울 때 JPA가 자식 DELETE를 먼저 보낸다(없으면 FK 제약 위반) / 쓰기 결과는 DB를 직접 보지 않고 같은 API(단건 조회 404)로 확인한다 / DELETE는 멱등이다: 두 번째 요청은 404지만 "글이 없다"는 서버 상태는 같다
+
+<a id="step-007"></a>
 
 ### 007: 댓글 다건 조회 GET /api/v1/posts/{postId}/comments  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/007)
 
@@ -289,6 +306,8 @@ public class ApiV1PostCommentController {
 
 **배운 점**: 소속이 필수인 자원은 경로를 중첩해 표현한다(`/posts/{postId}/comments`) / "없는 글"(404)과 "댓글 없는 글"(200 + `[]`)은 다르다 / LAZY 연관의 프록시는 `getId()`만으로는 SELECT를 하지 않지만, 컬렉션은 트랜잭션 밖에서 처음 읽으면 `LazyInitializationException`이 난다
 
+<a id="step-008"></a>
+
 ### 008: 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/008)
 
 **무엇을 했나**: `/posts/1/comments/1`이 200과 모든 필드(id, 날짜 2개, `postId`=1, `content`="댓글 1", 필드 정확히 5개)를 돌려준다는 테스트를 먼저 써서 실패(매핑이 없어 핸들러가 `ResourceHttpRequestHandler`)를 확인한 뒤, `ApiV1PostCommentController.getItem`과 `PostService.findCommentById`로 통과시켰습니다. 없는 댓글, 다른 글의 댓글(`/posts/1/comments/4`), 없는 글이 모두 404라는 테스트도 추가했습니다(구현이 이미 처리해서 바로 통과).
@@ -316,6 +335,8 @@ public PostCommentDto getItem(@PathVariable long postId, @PathVariable long id) 
 ```
 
 **배운 점**: 중첩 자원의 단건 조회는 "부모에 속하는지"까지 확인해야 한다 / 부모에서 자식을 꺼내는 구조로 만들면 소속 검사가 저절로 된다 / 클래스 수준 경로 변수와 메서드 수준 경로 변수를 함께 `@PathVariable`로 받는다
+
+<a id="step-009"></a>
 
 ### 009: 댓글 작성 POST /api/v1/posts/{postId}/comments  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/009)
 
@@ -347,6 +368,8 @@ public RsData<PostCommentDto> write(@PathVariable long postId,
 
 **배운 점**: cascade PERSIST로 저장되는 엔티티는 flush 전까지 INSERT되지 않는다 / IDENTITY 전략의 id는 INSERT 직후에야 생긴다 → 응답에 id가 필요하면 `flush()` / 하위 자원의 소속(`postId`)은 본문이 아니라 경로로 받는다
 
+<a id="step-010"></a>
+
 ### 010: 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/010)
 
 **무엇을 했나**: 1번 글의 1번 댓글을 수정하면 200·`"200-1"`·`"1번 댓글이 수정되었습니다."`·`data: null`이 오고, 다시 단건 조회하면 바뀐 본문과 갱신된 `modifyDate`가 보인다는 테스트를 먼저 써서 실패(핸들러 없음)를 확인한 뒤, `PostCommentModifyReqBody`, `PostComment.modify`, `PostService.modifyComment`, `ApiV1PostCommentController.modify`로 통과시켰습니다. 빈 본문 400(`"400-1"`)과 다른 글의 댓글 404(그 댓글은 그대로) 테스트도 추가했습니다.
@@ -374,6 +397,8 @@ public RsData<Void> modify(@PathVariable long postId, @PathVariable long id,
 ```
 
 **배운 점**: 변경 감지는 cascade 대상인 하위 엔티티(댓글)에도 똑같이 동작한다 / 같은 클래스 안의 `this.method()` 호출은 프록시를 거치지 않아 그 메서드의 `@Transactional(readOnly = true)`가 적용되지 않는다 / 작성과 수정은 규칙이 같아도 요청 DTO를 나눈다
+
+<a id="step-011"></a>
 
 ### 011: 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} 와 전체 정리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/011)
 
@@ -434,6 +459,8 @@ public RsData<Void> delete(@PathVariable long postId, @PathVariable long id) {
 - **하위 자원**: 댓글은 `/posts/{postId}/comments`로 중첩하고, "글의 댓글 목록 안에서 찾기"로 다른 글의 댓글을 404로 만든다(007, 008).
 - **TDD**: 매 단계 실패하는 HTTP 테스트를 먼저 쓰고(red, 주로 "핸들러 없음"), 최소 구현으로 통과(green)시켰다.
 
+<a id="step-012"></a>
+
 ### 012: 코드 리뷰 반영  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/012)
 
 **무엇을 했나**: 000–011 코드 리뷰 지적을 반영했습니다. 검증 실패 문구를 요청 DTO 애너테이션의 `message`로 한국어 고정하고, Spring MVC가 컨트롤러 전에 막는 에러(타입 오류·없는 URL·없는 메서드·없는 Content-Type)도 `RsData`로 응답하게 했습니다(동작이 바뀌는 두 가지는 테스트를 먼저 실패시킴). 나머지는 이름(`PostComment`, `SampleData`)을 GLOSSARY에 맞추고, 서비스·테스트의 중복을 헬퍼로 모은 리팩터링입니다(테스트 35개).
@@ -470,3 +497,21 @@ post.removePostComment(postComment);
 ```
 
 **배운 점**: Bean Validation 기본 메시지는 Locale을 따라가므로, 응답 문구를 고정하려면 `message`를 직접 쓴다(MockMvc 기본 Locale은 영어라 JVM 언어만 바꿔서는 드러나지 않고, `Accept-Language: ko-KR`로 보내야 드러난다) / 없는 URL은 Spring 6.1+에서 `NoResourceFoundException`이 되어 `@ExceptionHandler`로 잡을 수 있다 / 변경 감지는 값이 실제로 달라야 UPDATE를 만든다. 그래서 같은 내용으로 PUT하면 `modifyDate`는 그대로다(의도한 동작으로 두고 `PostService.modify` 주석에 설명)
+
+<a id="step-013"></a>
+
+### 013: README 목차를 단계 설명으로 연결  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/013)
+
+**무엇을 했나**: 단계 목차의 링크가 GitHub 코드 페이지 대신 README 안의 각 단계 설명으로 이동하도록 바꿨습니다. 각 단계 제목 위에 `<a id="step-NNN"></a>` 앵커를 두고, 목차는 `#step-NNN`을 가리킵니다.
+**왜**: 목차는 "어떤 단계가 있는지 훑고 설명으로 바로 가기" 위한 것이라 같은 문서 안에서 이동하는 편이 읽기 편합니다. 그 단계에서 바뀐 코드는 각 제목의 "코드 보기"(커밋 페이지)로 계속 볼 수 있습니다.
+**핵심 코드**
+
+```markdown
+| [004](#step-004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
+
+<a id="step-004"></a>
+
+### 004: 글 작성 POST /api/v1/posts 와 입력값 검증  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/004)
+```
+
+**배운 점**: GitHub는 제목마다 자동 앵커를 만들지만, 제목에 링크·기호·한글이 섞이면 앵커 이름을 예측하기 어렵다. `<a id>`로 직접 이름을 붙이면 제목 문구가 바뀌어도 링크가 깨지지 않는다.

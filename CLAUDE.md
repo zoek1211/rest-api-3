@@ -47,7 +47,7 @@ Refs #<ticket 번호>
 - 태그 메시지는 커밋 요약 한 줄: `git tag -a 004 -m "004: <요약>"`
 - 커밋과 태그를 함께 push한다: `git push origin HEAD && git push origin <태그>`
 - 그러면 GitHub에서 `https://github.com/zoek1211/rest-api-3/tree/<태그>`(그 시점 전체 코드)와 `https://github.com/zoek1211/rest-api-3/commit/<태그>`(그 단계에서 바뀐 코드) 주소로 바로 볼 수 있다.
-- README 단계 제목의 "코드 보기" 링크는 `/commit/<태그>`를 쓴다. 목차 표의 링크는 `/tree/<태그>`를 쓴다.
+- README 단계 제목의 "코드 보기" 링크는 `/commit/<태그>`를 쓴다. 목차 표의 링크는 README 안의 그 단계 설명(`#step-<태그>`)으로 이동한다.
 - `/implement-spec`이 서브에이전트를 병렬로 돌려도 태그는 **통합 브랜치에 들어간 순서대로** 메인 에이전트가 단다. 그래야 번호가 겹치거나 빠지지 않는다. 같은 커밋에 태그를 두 번 달지 않는다.
 
 ## README: 단계별 학습 노트
@@ -55,6 +55,8 @@ Refs #<ticket 번호>
 태그를 달 때마다 `README.md`의 "단계별 진행" 섹션에 항목을 하나 추가하고, 같은 커밋에 넣는다.
 
 ````markdown
+<a id="step-004"></a>
+
 ### 004: <요약>  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/004)
 
 **무엇을 했나**: 2–3문장
@@ -68,7 +70,7 @@ Refs #<ticket 번호>
 **배운 점**: 개념 1–3개
 ````
 
-README 맨 위에는 프로젝트 소개, 실행 방법, 그리고 전체 단계 목차(태그 링크)를 둔다.
+README 맨 위에는 프로젝트 소개, 실행 방법, 그리고 전체 단계 목차를 둔다. 목차 행은 `| [004](#step-004) | <요약> |` 형식으로, 각 단계 제목 위의 `<a id="step-004"></a>` 앵커를 가리킨다.
 
 ## Agent skills
 

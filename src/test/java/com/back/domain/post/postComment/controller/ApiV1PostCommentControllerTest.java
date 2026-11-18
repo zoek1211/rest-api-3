@@ -7,7 +7,7 @@ package com.back.domain.post.postComment.controller;
 // 왜 테스트 클래스를 따로 두나: 컨트롤러가 ApiV1PostCommentController로 나뉘었기 때문이다.
 //   테스트 클래스 하나 = 컨트롤러 하나로 맞춰 두면, "댓글 API가 무엇을 약속하는지"를 이 파일 하나에서 읽을 수 있다.
 //
-// 전제: 샘플 데이터(BaseInitData). 1번 글에 댓글 1·2·3, 2번 글에 댓글 4·5, 3번 글은 댓글 없음.
+// 전제: 샘플 데이터(SampleData). 1번 글에 댓글 1·2·3, 2번 글에 댓글 4·5, 3번 글은 댓글 없음.
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +23,10 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.back.global.test.ApiTestSupport.DATE_TIME_PATTERN;
+import static com.back.global.test.ApiTestSupport.NOT_EXISTING_ID;
+import static com.back.global.test.ApiTestSupport.notFound;
+import static com.back.global.test.ApiTestSupport.validationFailed;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
@@ -42,8 +46,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class ApiV1PostCommentControllerTest {
 
-    // 날짜는 값 대신 "존재 + ISO-8601 형식"만 본다. (ApiV1PostControllerTest와 같은 패턴)
-    private static final String DATE_TIME_PATTERN = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$";
 
     @Autowired
     private MockMvc mvc;
@@ -120,7 +122,7 @@ class ApiV1PostCommentControllerTest {
     void getItems_postNotFound() throws Exception {
         // 1. 요청 보내기
         ResultActions resultActions = mvc
-                .perform(get("/api/v1/posts/%d/comments".formatted(Integer.MAX_VALUE)))
+                .perform(get("/api/v1/posts/%d/comments".formatted(NOT_EXISTING_ID)))
                 .andDo(print());
 
         // 2. 결과 검증
@@ -128,10 +130,7 @@ class ApiV1PostCommentControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("getItems"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(notFound());
     }
 
     @Test
@@ -164,16 +163,13 @@ class ApiV1PostCommentControllerTest {
                 .andDo(print())
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("getItem"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(notFound());
     }
 
     @Test
     @DisplayName("댓글 단건 조회: 없는 댓글이면 404")
     void getItem_commentNotFound() throws Exception {
-        expectGetItemNotFound("/api/v1/posts/1/comments/%d".formatted(Integer.MAX_VALUE));
+        expectGetItemNotFound("/api/v1/posts/1/comments/%d".formatted(NOT_EXISTING_ID));
     }
 
     @Test
@@ -186,7 +182,7 @@ class ApiV1PostCommentControllerTest {
     @Test
     @DisplayName("댓글 단건 조회: 없는 글이면 404")
     void getItem_postNotFound() throws Exception {
-        expectGetItemNotFound("/api/v1/posts/%d/comments/1".formatted(Integer.MAX_VALUE));
+        expectGetItemNotFound("/api/v1/posts/%d/comments/1".formatted(NOT_EXISTING_ID));
     }
 
     @Test
@@ -258,12 +254,9 @@ class ApiV1PostCommentControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("write"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resultCode").value("400-1"))
-                .andExpect(jsonPath("$.msg").value("""
-                        content-NotBlank-must not be blank
-                        content-Size-size must be between 2 and 100""".stripIndent()))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(validationFailed("""
+                        content-NotBlank-댓글 본문을 입력해 주세요.
+                        content-Size-댓글 본문은 2자 이상 100자 이하로 입력해 주세요.""".stripIndent()));
     }
 
     @Test
@@ -271,7 +264,7 @@ class ApiV1PostCommentControllerTest {
     void write_postNotFound() throws Exception {
         mvc
                 .perform(
-                        post("/api/v1/posts/%d/comments".formatted(Integer.MAX_VALUE))
+                        post("/api/v1/posts/%d/comments".formatted(NOT_EXISTING_ID))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                         {
@@ -282,10 +275,7 @@ class ApiV1PostCommentControllerTest {
                 .andDo(print())
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("write"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(notFound());
     }
 
     @Test
@@ -354,12 +344,9 @@ class ApiV1PostCommentControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("modify"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resultCode").value("400-1"))
-                .andExpect(jsonPath("$.msg").value("""
-                        content-NotBlank-must not be blank
-                        content-Size-size must be between 2 and 100""".stripIndent()))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(validationFailed("""
+                        content-NotBlank-댓글 본문을 입력해 주세요.
+                        content-Size-댓글 본문은 2자 이상 100자 이하로 입력해 주세요.""".stripIndent()));
     }
 
     @Test
@@ -382,10 +369,7 @@ class ApiV1PostCommentControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("modify"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(notFound());
 
         // 3. 다시 조회: 2번 글의 주소로 읽으면 4번 댓글의 본문은 그대로다.
         mvc
@@ -429,14 +413,11 @@ class ApiV1PostCommentControllerTest {
     @DisplayName("댓글 삭제: 없는 댓글이면 404")
     void delete_commentNotFound() throws Exception {
         mvc
-                .perform(MockMvcRequestBuilders.delete("/api/v1/posts/1/comments/999"))
+                .perform(MockMvcRequestBuilders.delete("/api/v1/posts/1/comments/%d".formatted(NOT_EXISTING_ID)))
                 .andDo(print())
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("delete"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(notFound());
     }
 
     @Test
@@ -451,10 +432,7 @@ class ApiV1PostCommentControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostCommentController.class))
                 .andExpect(handler().methodName("delete"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()));
+                .andExpect(notFound());
 
         // 3. 다시 조회: 2번 글의 댓글은 여전히 2개다.
         mvc

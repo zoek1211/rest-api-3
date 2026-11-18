@@ -34,14 +34,14 @@ public class Post extends BaseEntity {
     //
     // 연관관계의 주인(owner): 외래 키(post_id)를 실제로 관리하는 쪽. 외래 키가 있는 PostComment.post가 주인이다.
     // mappedBy = "post": "나는 주인이 아니고, PostComment의 post 필드에 매핑된 거울일 뿐"이라는 뜻.
-    //   그래서 comments 리스트에 무엇을 넣어도 DB의 post_id는 바뀌지 않는다. 주인(comment.post)을 설정해야 바뀐다.
-    // 주의: 그래서 addComment()에서 리스트에 넣는 것과 comment.post 설정을 항상 함께 한다(생성자에서).
+    //   그래서 comments 리스트에 무엇을 넣어도 DB의 post_id는 바뀌지 않는다. 주인(postComment.post)을 설정해야 바뀐다.
+    // 주의: 그래서 addPostComment()에서 리스트에 넣는 것과 postComment.post 설정을 항상 함께 한다(생성자에서).
     //
     // cascade = REMOVE: 글을 삭제하면 그 글의 댓글도 함께 삭제한다.
     // orphanRemoval = true: comments 리스트에서 빠진 댓글(고아)은 DB에서도 삭제한다.
     //   댓글은 소속 글 없이 존재할 수 없다는 규칙(GLOSSARY.md)을 DB 수준에서 지키기 위함이다.
     // cascade = PERSIST: 트랜잭션 안에서 저장된 글의 comments에 새 댓글을 넣으면, 댓글도 함께 INSERT된다.
-    //   그래서 댓글 전용 저장소(PostCommentRepository) 없이 post.addComment(...)만으로 댓글이 저장된다.
+    //   그래서 댓글 전용 저장소(PostCommentRepository) 없이 post.addPostComment(...)만으로 댓글이 저장된다.
     // @OneToMany의 기본 fetch는 LAZY: 글을 읽을 때 댓글은 실제로 comments를 쓸 때 따로 조회한다.
     // 주의: LAZY 컬렉션은 트랜잭션(영속성 컨텍스트) 밖에서 읽으면 LazyInitializationException이 난다.
     @OneToMany(mappedBy = "post", cascade = {CascadeType.PERSIST, CascadeType.REMOVE}, orphanRemoval = true)
@@ -61,19 +61,19 @@ public class Post extends BaseEntity {
         this.content = content;
     }
 
-    public PostComment addComment(String content) {
-        PostComment comment = new PostComment(this, content);
-        comments.add(comment);
-        return comment;
+    public PostComment addPostComment(String content) {
+        PostComment postComment = new PostComment(this, content);
+        comments.add(postComment);
+        return postComment;
     }
 
     // 댓글 삭제: 리스트에서 빼기만 한다. DELETE SQL도, 저장소의 delete()도 여기엔 없다.
     // orphanRemoval = true 덕분에, 영속 상태인 글의 comments에서 빠진 댓글(고아)은 flush 때 JPA가 DELETE한다.
     //   "글의 댓글 목록에서 빠졌다 = 소속 글이 없다 = 존재할 수 없다"를 JPA가 대신 지켜 준다.
-    // 왜 PostCommentRepository.delete(comment)가 아닌가: 댓글은 언제나 글을 통해서만 다룬다(addComment와 짝).
+    // 왜 PostCommentRepository.delete(postComment)가 아닌가: 댓글은 언제나 글을 통해서만 다룬다(addPostComment와 짝).
     //   저장소로 직접 지우면 comments 리스트에는 지운 댓글이 남아, 같은 트랜잭션에서 목록을 읽을 때 어긋난다.
     // 주의: orphanRemoval이 없으면 리스트에서 빼도 DB에는 아무 일도 일어나지 않는다(mappedBy 쪽은 주인이 아니므로).
-    public void removeComment(PostComment comment) {
-        comments.remove(comment);
+    public void removePostComment(PostComment postComment) {
+        comments.remove(postComment);
     }
 }

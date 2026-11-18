@@ -40,7 +40,7 @@ public class ApiV1PostCommentController {
     // 없는 글이면 서비스가 NoSuchElementException → GlobalExceptionHandler가 404("404-1").
     @GetMapping
     public List<PostCommentDto> getItems(@PathVariable long postId) {
-        return postService.findCommentsByPostIdOrderByIdDesc(postId)
+        return postService.findPostCommentsByPostIdOrderByIdDesc(postId)
                 .stream()
                 .map(PostCommentDto::new) // 엔티티 → DTO
                 .toList();
@@ -51,7 +51,7 @@ public class ApiV1PostCommentController {
     // 없는 글, 없는 댓글, 다른 글의 댓글은 모두 같은 404("404-1"). 클라이언트 입장에서는 셋 다 "이 주소에 댓글이 없다"이다.
     @GetMapping("/{id}")
     public PostCommentDto getItem(@PathVariable long postId, @PathVariable long id) {
-        return new PostCommentDto(postService.findCommentById(postId, id));
+        return new PostCommentDto(postService.findPostCommentById(postId, id));
     }
 
     // POST /api/v1/posts/{postId}/comments: 댓글 작성.
@@ -64,13 +64,13 @@ public class ApiV1PostCommentController {
             @PathVariable long postId,
             @RequestBody @Valid PostCommentWriteReqBody reqBody
     ) {
-        // 서비스가 flush()까지 해 두었으므로 여기서 comment.getId()는 이미 채워져 있다(PostService.writeComment 주석).
-        PostComment comment = postService.writeComment(postId, reqBody.content());
+        // 서비스가 flush()까지 해 두었으므로 여기서 postComment.getId()는 이미 채워져 있다(PostService.writePostComment 주석).
+        PostComment postComment = postService.writePostComment(postId, reqBody.content());
 
         return new RsData<>(
                 "201-1",
-                "%d번 댓글이 작성되었습니다.".formatted(comment.getId()),
-                new PostCommentDto(comment)
+                "%d번 댓글이 작성되었습니다.".formatted(postComment.getId()),
+                new PostCommentDto(postComment)
         );
     }
 
@@ -85,7 +85,7 @@ public class ApiV1PostCommentController {
             @PathVariable long id,
             @RequestBody @Valid PostCommentModifyReqBody reqBody
     ) {
-        postService.modifyComment(postId, id, reqBody.content());
+        postService.modifyPostComment(postId, id, reqBody.content());
 
         return new RsData<>(
                 "200-1",
@@ -99,7 +99,7 @@ public class ApiV1PostCommentController {
     //   - 성공: 200 + "200-1", data는 null. 지운 댓글은 더 보여 줄 것이 없다.
     @DeleteMapping("/{id}")
     public RsData<Void> delete(@PathVariable long postId, @PathVariable long id) {
-        postService.deleteComment(postId, id);
+        postService.deletePostComment(postId, id);
 
         return new RsData<>(
                 "200-1",

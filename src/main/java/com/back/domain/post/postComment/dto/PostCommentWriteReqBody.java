@@ -13,9 +13,10 @@ import jakarta.validation.constraints.Size;
 
 // 댓글 본문 규칙: 2–100자, 공백만은 안 된다. (글 본문 5000자보다 훨씬 짧다)
 // 주의: @Size는 null을 통과시키므로 @NotBlank와 함께 쓴다. 빈 문자열 ""은 두 규칙을 모두 어겨 msg가 두 줄이 된다.
+// message: 문구를 한국어로 고정한다. 기본 메시지는 요청 언어에 따라 바뀌기 때문이다(PostWriteReqBody 주석).
 public record PostCommentWriteReqBody(
-        @NotBlank
-        @Size(min = 2, max = 100)
+        @NotBlank(message = "댓글 본문을 입력해 주세요.")
+        @Size(min = 2, max = 100, message = "댓글 본문은 2자 이상 100자 이하로 입력해 주세요.")
         String content
 ) {
 }

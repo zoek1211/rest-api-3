@@ -15,8 +15,8 @@ import jakarta.validation.constraints.Size;
 // 규칙은 작성과 같다: 2–100자, 공백만은 안 된다.
 // 주의: @Size는 null을 통과시키므로 @NotBlank와 함께 쓴다.
 public record PostCommentModifyReqBody(
-        @NotBlank
-        @Size(min = 2, max = 100)
+        @NotBlank(message = "댓글 본문을 입력해 주세요.")
+        @Size(min = 2, max = 100, message = "댓글 본문은 2자 이상 100자 이하로 입력해 주세요.")
         String content
 ) {
 }

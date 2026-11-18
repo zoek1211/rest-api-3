@@ -37,7 +37,8 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [008](https://github.com/zoek1211/rest-api-3/tree/008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
 | [009](https://github.com/zoek1211/rest-api-3/tree/009) | 댓글 작성 POST /api/v1/posts/{postId}/comments |
 | [010](https://github.com/zoek1211/rest-api-3/tree/010) | 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id} |
-| [011](https://github.com/zoek1211/rest-api-3/tree/011) | 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} 와 전체 정리 |
+| [011](https://github.com/zoek1211/rest-api-3/tree/011) | 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} |
+| [012](https://github.com/zoek1211/rest-api-3/tree/012) | 코드 리뷰 반영 |
 
 ## 단계별 진행
 
@@ -376,7 +377,7 @@ public RsData<Void> modify(@PathVariable long postId, @PathVariable long id,
 
 ### 011: 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} 와 전체 정리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/011)
 
-**무엇을 했나**: 1번 글의 1번 댓글을 삭제하면 200·`"200-1"`·`"1번 댓글이 삭제되었습니다."`·`data: null`이 오고, 이어서 단건 조회는 404, 1번 글의 댓글 목록은 2개라는 테스트를 먼저 써서 실패(핸들러 없음)를 확인한 뒤, `Post.removeComment`, `PostService.deleteComment`, `ApiV1PostCommentController.delete`로 통과시켰습니다. 없는 댓글 404, 다른 글의 댓글 404(그 글의 댓글은 그대로 2개) 테스트도 추가했습니다. 또 2번 글의 댓글이 2개라는 목록 테스트를 더해 샘플 데이터 분배(3/2/0)가 모두 HTTP 테스트로 확인되므로, 001부터 남겨 둔 임시 저장소 테스트 `SampleDataTest`를 지웠습니다.
+**무엇을 했나**: "1번 글의 1번 댓글을 지우면 200 `"200-1"`, 이후 단건 조회는 404, 목록은 2개"라는 테스트를 먼저 실패시킨 뒤 `Post.removeComment`·`PostService.deleteComment`·컨트롤러 `delete`로 통과시키고, 없는 댓글·다른 글의 댓글 404 테스트를 더했습니다. 2번 글의 댓글 목록 테스트로 샘플 데이터 분배(3/2/0)를 HTTP에서 모두 확인하게 되어, 임시 저장소 테스트 `SampleDataTest`는 지웠습니다.
 **왜**: 댓글은 글 없이 존재할 수 없으므로 저장소로 직접 지우지 않고 "글의 댓글 목록에서 뺀다". 그러면 `orphanRemoval = true`가 빠진 댓글(고아)을 DELETE한다. 찾기는 수정과 같이 `findCommentById`를 재사용해 소속 검사가 저절로 되고, `flush()`로 DELETE SQL을 응답 전에 실행한다.
 **핵심 코드**
 
@@ -432,3 +433,40 @@ public RsData<Void> delete(@PathVariable long postId, @PathVariable long id) {
 - **트랜잭션과 `flush()`**: `@Transactional` 테스트는 커밋하지 않으므로, 쓰기 서비스에서 `flush()`로 SQL을 앞당겨야 id·`modifyDate`·FK 오류가 응답 시점에 드러난다(005, 006, 009). 같은 클래스 안의 자기 호출에는 `@Transactional`이 적용되지 않는다(010).
 - **하위 자원**: 댓글은 `/posts/{postId}/comments`로 중첩하고, "글의 댓글 목록 안에서 찾기"로 다른 글의 댓글을 404로 만든다(007, 008).
 - **TDD**: 매 단계 실패하는 HTTP 테스트를 먼저 쓰고(red, 주로 "핸들러 없음"), 최소 구현으로 통과(green)시켰다.
+
+### 012: 코드 리뷰 반영  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/012)
+
+**무엇을 했나**: 000–011 코드 리뷰 지적을 반영했습니다. 검증 실패 문구를 요청 DTO 애너테이션의 `message`로 한국어 고정하고, Spring MVC가 컨트롤러 전에 막는 에러(타입 오류·없는 URL·없는 메서드·없는 Content-Type)도 `RsData`로 응답하게 했습니다(동작이 바뀌는 두 가지는 테스트를 먼저 실패시킴). 나머지는 이름(`PostComment`, `SampleData`)을 GLOSSARY에 맞추고, 서비스·테스트의 중복을 헬퍼로 모은 리팩터링입니다(테스트 35개).
+**왜**: 기본 검증 메시지는 요청 언어(`Accept-Language`, 없으면 서버 JVM 언어)를 따라 `must not be blank` / `공백일 수 없습니다`로 바뀌어, 같은 요청이 환경마다 다른 응답을 받았습니다. 또 "모든 에러는 같은 `{resultCode, msg, data}` 모양"이라는 약속이 Spring 기본 에러 응답에서는 깨져 있었습니다.
+
+| resultCode | 상태 | 언제 |
+|---|---|---|
+| `400-1` | 400 | 입력값 검증 실패(기존) |
+| `400-2` | 400 | JSON 형식 오류(기존) |
+| `400-3` | 400 | 경로 변수·파라미터 타입 오류 (`/posts/abc`) |
+| `404-1` | 404 | 없는 데이터(기존) |
+| `404-2` | 404 | 없는 URL |
+| `405-1` | 405 | 지원하지 않는 HTTP 메서드 (`Allow` 헤더 포함) |
+| `415-1` | 415 | 지원하지 않는 Content-Type |
+
+**핵심 코드**
+
+```java
+// PostWriteReqBody.java: 문구를 직접 적어 요청 언어와 상관없이 같은 msg
+@NotBlank(message = "제목을 입력해 주세요.")
+@Size(min = 2, max = 100, message = "제목은 2자 이상 100자 이하로 입력해 주세요.")
+String title,
+
+// GlobalExceptionHandler.java: 컨트롤러에 닿기 전 에러도 RsData로 (상태는 ResponseAspect가 앞자리로)
+@ExceptionHandler(NoResourceFoundException.class)
+public RsData<Void> handle(NoResourceFoundException e) {
+    return new RsData<>("404-2", "요청한 주소가 존재하지 않습니다.");
+}
+
+// PostService.java: 이미 찾은 post를 그대로 쓴다 (예전: postComment.getPost().removeComment(...))
+Post post = getPostOrThrow(postId);
+PostComment postComment = getPostCommentOrThrow(post, id);
+post.removePostComment(postComment);
+```
+
+**배운 점**: Bean Validation 기본 메시지는 Locale을 따라가므로, 응답 문구를 고정하려면 `message`를 직접 쓴다(MockMvc 기본 Locale은 영어라 JVM 언어만 바꿔서는 드러나지 않고, `Accept-Language: ko-KR`로 보내야 드러난다) / 없는 URL은 Spring 6.1+에서 `NoResourceFoundException`이 되어 `@ExceptionHandler`로 잡을 수 있다 / 변경 감지는 값이 실제로 달라야 UPDATE를 만든다. 그래서 같은 내용으로 PUT하면 `modifyDate`는 그대로다(의도한 동작으로 두고 `PostService.modify` 주석에 설명)

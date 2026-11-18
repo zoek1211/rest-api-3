@@ -16,13 +16,14 @@ package com.back.domain.post.post.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+// 검증 문구(message)도 작성과 같다. 왜 문구를 직접 쓰는지는 PostWriteReqBody 주석 참고(언어 고정).
 public record PostModifyReqBody(
-        @NotBlank
-        @Size(min = 2, max = 100)
+        @NotBlank(message = "제목을 입력해 주세요.")
+        @Size(min = 2, max = 100, message = "제목은 2자 이상 100자 이하로 입력해 주세요.")
         String title,
 
-        @NotBlank
-        @Size(min = 2, max = 5000)
+        @NotBlank(message = "본문을 입력해 주세요.")
+        @Size(min = 2, max = 5000, message = "본문은 2자 이상 5000자 이하로 입력해 주세요.")
         String content
 ) {
 }

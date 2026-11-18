@@ -27,6 +27,11 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.back.global.test.ApiTestSupport.DATE_TIME_PATTERN;
+import static com.back.global.test.ApiTestSupport.NOT_EXISTING_ID;
+import static com.back.global.test.ApiTestSupport.notFound;
+import static com.back.global.test.ApiTestSupport.rsDataError;
+import static com.back.global.test.ApiTestSupport.validationFailed;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
@@ -38,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// @SpringBootTest: 전체 Spring 컨텍스트(모든 Bean)를 띄운다. 샘플 데이터(BaseInitData)도 이때 들어간다.
+// @SpringBootTest: 전체 Spring 컨텍스트(모든 Bean)를 띄운다. 샘플 데이터(SampleData)도 이때 들어간다.
 @SpringBootTest
 // @AutoConfigureMockMvc: MockMvc Bean을 만들어 주입받을 수 있게 한다.
 @AutoConfigureMockMvc
@@ -49,9 +54,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class ApiV1PostControllerTest {
 
-    // LocalDateTime이 JSON 문자열로 바뀐 모양: 2026-11-18T10:15:30 (+ 소수점 이하 초는 있을 수도 없을 수도)
-    // 날짜는 실행할 때마다 값이 달라서, 정확한 값 대신 "존재 + ISO-8601 형식"만 확인한다.
-    private static final String DATE_TIME_PATTERN = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$";
 
     @Autowired
     private MockMvc mvc;
@@ -113,24 +115,19 @@ class ApiV1PostControllerTest {
     @Test
     @DisplayName("글 단건 조회: 없는 글이면 404와 공통 에러 형식(RsData)이 온다")
     void getItem_notFound() throws Exception {
-        // 1. 요청 보내기: 샘플 글은 1·2·3번뿐이라 999번은 없다
+        // 1. 요청 보내기: 샘플 글은 1·2·3번뿐이라 NOT_EXISTING_ID(int 최댓값)번 글은 없다(ApiTestSupport)
         ResultActions resultActions = mvc
-                .perform(get("/api/v1/posts/999"))
+                .perform(get("/api/v1/posts/%d".formatted(NOT_EXISTING_ID)))
                 .andDo(print());
 
         // 2. 결과 검증
         // ADR 0001 Consequences: HTTP 상태와 resultCode를 둘 다 보고 서로 맞는지 확인한다.
+        // notFound(): 404 + RsData{"404-1", "해당 데이터가 존재하지 않습니다.", null} 검증 묶음(ApiTestSupport).
+        //   글·댓글 테스트에서 똑같이 반복되던 다섯 줄을 012에서 하나로 모았다.
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("getItem"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                // 주의: jsonPath("$.data").doesNotExist()는 "키가 아예 없음"과 "값이 null"을 구분하지 않는다.
-                //   spec은 "data: null"(키는 있고 값이 null)이므로 value(nullValue())로 값을 보고,
-                //   아래 length() == 3으로 키 3개(resultCode, msg, data)가 모두 있는지 확인한다.
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(notFound());
     }
 
     @Test
@@ -196,18 +193,40 @@ class ApiV1PostControllerTest {
 
         // 2. 결과 검증
         // 빈 문자열 ""은 @NotBlank와 @Size(min = 2)를 둘 다 어긴다 → 두 줄.
-        // 줄 형식: 필드명-규칙-메시지. 메시지는 Bean Validation 기본 메시지다.
-        //   (MockMvc 요청의 기본 Locale은 영어라 영어 메시지가 나온다. 실제 서버에서는 Accept-Language에 따라 달라진다.)
+        // 줄 형식: 필드명-규칙-메시지. 메시지는 요청 DTO의 애너테이션에 적어 둔 한국어 문구다(message 속성).
+        //   MockMvc 요청의 기본 Locale은 영어인데도 한국어가 나온다 = 문구가 요청 언어를 따라가지 않는다는 뜻이다.
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("write"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resultCode").value("400-1"))
-                .andExpect(jsonPath("$.msg").value("""
-                        title-NotBlank-must not be blank
-                        title-Size-size must be between 2 and 100""".stripIndent()))
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(validationFailed("""
+                        title-NotBlank-제목을 입력해 주세요.
+                        title-Size-제목은 2자 이상 100자 이하로 입력해 주세요.""".stripIndent()));
+    }
+
+    @Test
+    @DisplayName("글 작성: 검증 실패 msg는 요청 언어(Accept-Language)와 상관없이 항상 같다")
+    void write_blankTitle_sameMsgForAnyLocale() throws Exception {
+        // 같은 잘못된 요청을 영어·한국어 두 언어로 보내고, msg가 완전히 같은지 본다.
+        // 주의: Bean Validation 기본 메시지는 "요청의 Locale"(Accept-Language, 없으면 서버 JVM 언어)에 따라
+        //   "must not be blank" / "공백일 수 없습니다"처럼 바뀐다. 그러면 같은 API가 환경마다 다른 응답을 준다.
+        for (String language : new String[]{"en", "ko-KR"}) {
+            mvc
+                    .perform(
+                            post("/api/v1/posts")
+                                    .header("Accept-Language", language)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("""
+                                            {
+                                                "title": "",
+                                                "content": "새 내용"
+                                            }
+                                            """)
+                    )
+                    .andDo(print())
+                    .andExpect(validationFailed("""
+                            title-NotBlank-제목을 입력해 주세요.
+                            title-Size-제목은 2자 이상 100자 이하로 입력해 주세요.""".stripIndent()));
+        }
     }
 
     @Test
@@ -231,13 +250,9 @@ class ApiV1PostControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("write"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resultCode").value("400-1"))
-                .andExpect(jsonPath("$.msg").value("""
-                        content-NotBlank-must not be blank
-                        content-Size-size must be between 2 and 5000""".stripIndent()))
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(validationFailed("""
+                        content-NotBlank-본문을 입력해 주세요.
+                        content-Size-본문은 2자 이상 5000자 이하로 입력해 주세요.""".stripIndent()));
     }
 
     @Test
@@ -261,11 +276,7 @@ class ApiV1PostControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("write"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resultCode").value("400-2"))
-                .andExpect(jsonPath("$.msg").value("요청 본문이 올바르지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(rsDataError(400, "400-2", "요청 본문이 올바르지 않습니다."));
     }
 
     @Test
@@ -320,10 +331,10 @@ class ApiV1PostControllerTest {
     @Test
     @DisplayName("글 수정: 없는 글이면 404 \"404-1\"")
     void modify_notFound() throws Exception {
-        // 1. 요청 보내기: 본문은 올바르지만 999번 글이 없다
+        // 1. 요청 보내기: 본문은 올바르지만 NOT_EXISTING_ID번 글이 없다
         ResultActions resultActions = mvc
                 .perform(
-                        put("/api/v1/posts/999")
+                        put("/api/v1/posts/%d".formatted(NOT_EXISTING_ID))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                         {
@@ -339,11 +350,7 @@ class ApiV1PostControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("modify"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(notFound());
     }
 
     @Test
@@ -367,13 +374,9 @@ class ApiV1PostControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("modify"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resultCode").value("400-1"))
-                .andExpect(jsonPath("$.msg").value("""
-                        title-NotBlank-must not be blank
-                        title-Size-size must be between 2 and 100""".stripIndent()))
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(validationFailed("""
+                        title-NotBlank-제목을 입력해 주세요.
+                        title-Size-제목은 2자 이상 100자 이하로 입력해 주세요.""".stripIndent()));
 
         // @Valid에서 막혀 서비스까지 가지 않았으므로, 본문도 옛 값 그대로다.
         mvc.perform(get("/api/v1/posts/1"))
@@ -415,7 +418,7 @@ class ApiV1PostControllerTest {
         // 1. 요청 보내기
         ResultActions resultActions = mvc
                 .perform(
-                        MockMvcRequestBuilders.delete("/api/v1/posts/999")
+                        MockMvcRequestBuilders.delete("/api/v1/posts/%d".formatted(NOT_EXISTING_ID))
                 )
                 .andDo(print());
 
@@ -423,10 +426,6 @@ class ApiV1PostControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("delete"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.resultCode").value("404-1"))
-                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
-                .andExpect(jsonPath("$.data").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(notFound());
     }
 }

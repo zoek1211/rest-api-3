@@ -79,4 +79,23 @@ public class PostService {
         // 주의: flush를 해도 롤백은 여전히 가능하다. 실행된 UPDATE는 트랜잭션이 끝날 때 커밋되거나 롤백된다.
         postRepository.flush();
     }
+
+    // 글 삭제. 없는 글이면 NoSuchElementException → GlobalExceptionHandler가 404로 바꾼다.
+    @Transactional
+    public void delete(long id) {
+        // 왜 deleteById(id)가 아니라 "먼저 찾고 지우기"인가:
+        //   없는 글을 404로 알려 주려면 존재 여부를 먼저 확인해야 한다. findById(...).orElseThrow()로
+        //   단건 조회·수정과 같은 404 길을 그대로 탄다.
+        Post post = postRepository.findById(id).orElseThrow();
+
+        // 댓글은 따로 지우지 않는다. Post.comments에 cascade REMOVE(+ orphanRemoval)가 걸려 있어서,
+        //   글을 지우면 JPA가 댓글들을 먼저 DELETE한 뒤 글을 DELETE한다.
+        // 주의: cascade가 없다면 post_comment.post_id 외래 키(FK)가 이 글을 가리키고 있으므로
+        //   글 DELETE가 무결성 제약 위반으로 실패한다. "댓글 달린 글 삭제" 테스트가 이것을 지킨다.
+        postRepository.delete(post);
+
+        // flush(): 수정과 같은 이유. 테스트처럼 바깥 트랜잭션이 있으면 커밋 전까지 DELETE SQL이 실제로 나가지 않아,
+        //   FK 위반 같은 DB 오류가 응답이 끝난 뒤(롤백 시점)로 숨어 버린다. 지금 실행해서 오류가 있으면 바로 드러나게 한다.
+        postRepository.flush();
+    }
 }

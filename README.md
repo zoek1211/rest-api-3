@@ -32,10 +32,11 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [003](https://github.com/zoek1211/rest-api-3/tree/003) | 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리 |
 | [004](https://github.com/zoek1211/rest-api-3/tree/004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
 | [005](https://github.com/zoek1211/rest-api-3/tree/005) | 글 수정 PUT /api/v1/posts/{id} |
+| [006](https://github.com/zoek1211/rest-api-3/tree/006) | 글 삭제 DELETE /api/v1/posts/{id} |
 
 ## 단계별 진행
 
-### 000: 프로젝트 뼈대와 설정 문서  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/000)
+### 000: 프로젝트 뼈대와 설정 문서  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/000)
 
 **무엇을 했나**: Spring Initializr로 Spring Boot 4.1 + Gradle Kotlin DSL 프로젝트를 만들고, 개발용 H2 파일 DB(MySQL 모드, H2 콘솔)와 테스트용 H2 메모리 DB를 프로필로 나눠 설정했습니다. 컨텍스트가 뜨는지만 보는 `contextLoads` 테스트를 먼저 실패시키고(Application 클래스 없음) 통과시켰습니다.
 **왜**: 이후 모든 엔드포인트 테스트가 "전체 컨텍스트 + test 프로필 + 깨끗한 메모리 DB" 위에서 돌기 때문에, 그 바닥이 먼저 확실히 동작해야 합니다. 개발 DB는 파일이라 재시작해도 데이터가 남고, 테스트 DB는 메모리라 매번 새로 시작합니다.
@@ -63,7 +64,7 @@ spring:
 
 **배운 점**: Gradle toolchain + foojay로 JDK 버전을 빌드에 고정하기 / Spring 프로필로 환경별 설정 덮어쓰기 / `@SpringBootTest`는 `@SpringBootConfiguration`을 패키지 위쪽으로 찾아 올라간다(그래서 Application 클래스는 최상위 패키지에)
 
-### 001: 글·댓글 엔티티와 샘플 데이터  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/001)
+### 001: 글·댓글 엔티티와 샘플 데이터  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/001)
 
 **무엇을 했나**: 공통 부모 `BaseEntity`(id, 작성일, 수정일)와 글 `Post`, 댓글 `PostComment` 엔티티를 만들고, 앱이 시작될 때 글이 0개면 글 3개·댓글 5개(분배 3/2/0)를 넣는 `BaseInitData`를 추가했습니다. 아직 API가 없어서 `SampleDataTest`가 저장소로 개수와 분배, 날짜 자동 기록만 확인합니다(이후 API 테스트가 생기면 대체됩니다).
 **왜**: 이후 모든 엔드포인트 테스트가 "1번 글에 댓글 3개" 같은 샘플 데이터를 전제로 쓰기 때문에 데이터의 바닥을 먼저 깝니다. 개발 DB는 파일이라 `count() > 0` 검사가 없으면 `bootRun`마다 데이터가 쌓입니다.
@@ -94,7 +95,7 @@ public void run(ApplicationArguments args) {
 
 **배운 점**: 양방향 연관관계와 연관관계의 주인(`mappedBy`) / JPA Auditing은 `@EntityListeners` + `@EnableJpaAuditing` 둘 다 있어야 하고, 빠지면 에러 없이 null이 저장된다 / `ApplicationRunner`는 `@SpringBootTest` 컨텍스트에서도 실행된다
 
-### 002: 글 다건 조회 GET /api/v1/posts  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/002)
+### 002: 글 다건 조회 GET /api/v1/posts  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/002)
 
 **무엇을 했나**: 첫 MockMvc 테스트 `ApiV1PostControllerTest`를 먼저 써서 실패를 확인하고(컨트롤러 없음 → 컴파일 실패, 빈 컨트롤러 → 매핑 없음), `ApiV1PostController` → `PostService` → `PostRepository` 흐름과 응답용 `PostDto` record를 만들어 통과시켰습니다. 응답은 래퍼 없는 `PostDto` 배열이고 id 내림차순(3, 2, 1)입니다.
 **왜**: 엔티티를 그대로 JSON으로 내보내면 `Post.comments ↔ PostComment.post` 순환 참조, 지연 로딩 예외, DB 구조 노출 문제가 생깁니다. 조회는 데이터 자체가 결과라 `RsData`로 감싸지 않습니다(ADR 0001).
@@ -129,7 +130,7 @@ for (int i = 0; i < 3; i++) {
 
 **배운 점**: MockMvc는 서버 없이 DispatcherServlet에 요청을 넣어 HTTP 경계 전체를 검증한다 / DTO(record)로 API 계약과 엔티티 구조를 분리한다 / 테스트의 `@Transactional`은 끝나면 롤백해 테스트끼리 DB를 공유해도 서로 영향이 없다
 
-### 003: 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/003)
+### 003: 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/003)
 
 **무엇을 했나**: `GET /posts/1`(200, 모든 필드)과 `GET /posts/999`(404) 테스트를 먼저 써서 실패를 확인했습니다(매핑 없음 → `ResourceHttpRequestHandler`, 예외 처리기 없음 → `ServletException`으로 터짐). `getItem` + `PostService.findById`(`orElseThrow()`)로 성공 케이스를, 공통 응답 봉투 `RsData{resultCode, msg, data}`와 `GlobalExceptionHandler`로 404 케이스를 통과시켰습니다.
 **왜**: 컨트롤러마다 try-catch로 404를 만들면 코드가 복사되고 응답 모양이 어긋나기 쉽습니다. 서비스는 예외만 던지고, 에러 응답은 `@RestControllerAdvice` 한 곳에서 같은 형식으로 만듭니다. 상태 코드는 `ResponseAspect`가 생기기 전까지 핸들러가 `ResponseEntity`로 직접 정합니다.
@@ -161,7 +162,7 @@ mvc.perform(get("/api/v1/posts/999"))
 
 **배운 점**: `@PathVariable`로 URL 경로 값을 받는다 / `Optional.orElseThrow()`로 "없음"을 예외로 바꾸고 `@RestControllerAdvice` + `@ExceptionHandler`에서 한 번에 HTTP 응답으로 변환한다 / 처리기가 없으면 MockMvc에서는 예외가 `ServletException`으로 그대로 튀어나온다
 
-### 004: 글 작성 POST /api/v1/posts 와 입력값 검증  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/004)
+### 004: 글 작성 POST /api/v1/posts 와 입력값 검증  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/004)
 
 **무엇을 했나**: 정상 작성(201, `"201-1"`, `"4번 글이 작성되었습니다."`, data 전체 필드, 다시 다건 조회하면 4개), 빈 제목·빈 본문(400 `"400-1"`), 깨진 JSON(400 `"400-2"`) 테스트를 하나씩 먼저 써서 실패를 확인하고 통과시켰습니다. 요청 DTO `PostWriteReqBody`(`@NotBlank`, `@Size`)와 `@Valid`로 입력을 검증하고, `ResponseAspect`가 `RsData.resultCode` 앞자리로 HTTP 상태를 정하게 해서 404 처리기도 `ResponseEntity` 없이 `RsData`만 반환하도록 정리했습니다.
 **왜**: 상태 코드를 컨트롤러마다 `ResponseEntity`로 적으면 `resultCode`와 실제 상태가 두 군데에서 따로 관리되어 어긋날 수 있습니다(ADR 0001). AOP로 한 곳에서 정하면 컨트롤러는 "무슨 결과인지"만 말합니다. 검증·JSON 오류는 컨트롤러 본문까지 오지 않고 예외로 끝나므로 전역 처리기에서 400으로 바꿉니다.
@@ -196,7 +197,7 @@ return new RsData<>("400-1", msg);
 
 **배운 점**: AOP(`@Aspect` + `@Around`)는 Bean을 프록시로 감싸 여러 메서드에 공통 동작을 끼워 넣는다(Boot 4 스타터 이름은 `spring-boot-starter-aspectj`) / `@Valid`가 있어야 요청 DTO의 검증 애너테이션이 동작하고, 실패하면 `MethodArgumentNotValidException`이 난다 / JSON 변환 실패(`HttpMessageNotReadableException`)는 검증보다 앞 단계라 코드를 나눠(400-2) 구분한다
 
-### 005: 글 수정 PUT /api/v1/posts/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/005)
+### 005: 글 수정 PUT /api/v1/posts/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/005)
 
 **무엇을 했나**: 정상 수정(200, `"200-1"`, `"1번 글이 수정되었습니다."`, `data: null`, 다시 단건 조회하면 제목·본문이 바뀌고 `modifyDate`가 수정 전과 다름) 테스트를 먼저 써서 실패(핸들러 없음)를 확인하고 통과시켰습니다. 없는 글(404 `"404-1"`)과 빈 제목(400 `"400-1"`, 글은 그대로) 테스트도 추가했는데, 기존 `GlobalExceptionHandler`가 이미 처리해 처음부터 통과했습니다. 요청 DTO는 작성과 같은 규칙의 `PostModifyReqBody`를 따로 두었습니다.
 **왜**: 수정은 `save()` 없이 엔티티 값만 바꾸면 트랜잭션이 끝날 때 JPA가 변경을 감지(dirty checking)해 UPDATE를 보냅니다. 다만 테스트처럼 바깥 트랜잭션에 묶여 커밋이 미뤄지면 `@LastModifiedDate`도 갱신되지 않고, 같은 트랜잭션의 단건 조회는 1차 캐시의 옛 값을 돌려줍니다. 그래서 서비스에서 `flush()`로 UPDATE를 바로 실행해 "수정 API가 끝나면 수정일이 이미 갱신되어 있다"를 보장했습니다.
@@ -222,3 +223,30 @@ public RsData<Void> modify(@PathVariable long id, @RequestBody @Valid PostModify
 ```
 
 **배운 점**: 영속성 컨텍스트에 있는 엔티티는 값만 바꾸면 flush 시점에 스냅샷과 비교해 UPDATE가 자동으로 나간다(dirty checking, `readOnly` 트랜잭션에서는 안 된다) / `@LastModifiedDate`는 flush 때 채워지므로 커밋이 미뤄지면 응답에 옛 수정일이 보일 수 있다 / PUT은 자원 전체를 바꾸는 요청이라 모든 필드가 필수다
+
+### 006: 글 삭제 DELETE /api/v1/posts/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/006)
+
+**무엇을 했나**: 댓글 3개가 달린 1번 글을 삭제하면 200(`"200-1"`, `"1번 글이 삭제되었습니다."`, `data: null`)이고 이후 단건 조회는 404라는 테스트와, 없는 글 삭제는 404라는 테스트를 먼저 써서 실패(핸들러 없음)를 확인하고 통과시켰습니다. 서비스는 글을 찾은 뒤(`orElseThrow`, 없으면 404) `delete` + `flush()`합니다.
+**왜**: 댓글은 `Post.comments`의 cascade REMOVE가 함께 지우므로 따로 지우지 않습니다(SQL 로그에 `post_comment` DELETE 3번 → `post` DELETE 1번). `flush()`가 없으면 테스트의 바깥 트랜잭션 때문에 DELETE SQL이 롤백 직전까지 안 나가, 외래 키 위반 같은 DB 오류가 테스트에서 숨겨집니다. 응답은 204 대신 ADR 0001대로 RsData 본문이 있는 200으로 통일했습니다.
+**핵심 코드**
+
+```java
+// PostService.java
+@Transactional
+public void delete(long id) {
+    Post post = postRepository.findById(id).orElseThrow(); // 없으면 404
+
+    postRepository.delete(post); // 댓글은 cascade REMOVE로 먼저 함께 삭제된다
+
+    postRepository.flush(); // DELETE SQL을 지금 실행해 FK 오류 등이 바로 드러나게 한다
+}
+
+// ApiV1PostController.java
+@DeleteMapping("/{id}")
+public RsData<Void> delete(@PathVariable long id) {
+    postService.delete(id);
+    return new RsData<>("200-1", "%d번 글이 삭제되었습니다.".formatted(id)); // data = null
+}
+```
+
+**배운 점**: `cascade = REMOVE`가 있으면 부모를 지울 때 JPA가 자식 DELETE를 먼저 보낸다(없으면 FK 제약 위반) / 쓰기 결과는 DB를 직접 보지 않고 같은 API(단건 조회 404)로 확인한다 / DELETE는 멱등이다: 두 번째 요청은 404지만 "글이 없다"는 서버 상태는 같다

@@ -15,6 +15,7 @@ import com.back.domain.post.post.service.PostService;
 import com.back.global.rsData.RsData;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -93,6 +94,21 @@ public class ApiV1PostController {
         return new RsData<>(
                 "200-1",
                 "%d번 글이 수정되었습니다.".formatted(id)
+        );
+    }
+
+    // DELETE /api/v1/posts/{id}: 글 삭제. 그 글의 댓글도 함께 지워진다(Post.comments의 cascade REMOVE).
+    // DELETE도 PUT처럼 멱등이다: 같은 요청을 두 번 보내도 "그 글이 없다"는 최종 상태는 같다.
+    //   (두 번째 응답은 404지만, 멱등성은 응답 코드가 아니라 서버 상태가 같으냐의 문제다.)
+    // 반환: 수정과 같이 200("200-1"), data는 null.
+    //   대안으로 204 No Content(본문 없음)도 흔하지만, ADR 0001에 따라 모든 쓰기 응답을 RsData 본문으로 통일했다.
+    @DeleteMapping("/{id}")
+    public RsData<Void> delete(@PathVariable long id) {
+        postService.delete(id);
+
+        return new RsData<>(
+                "200-1",
+                "%d번 글이 삭제되었습니다.".formatted(id)
         );
     }
 }

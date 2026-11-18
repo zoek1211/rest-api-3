@@ -46,7 +46,8 @@ Refs #<ticket 번호>
 - 다음 번호는 `git tag --list '[0-9][0-9][0-9]' | sort | tail -1`에 1을 더해서 정한다.
 - 태그 메시지는 커밋 요약 한 줄: `git tag -a 004 -m "004: <요약>"`
 - 커밋과 태그를 함께 push한다: `git push origin HEAD && git push origin <태그>`
-- 그러면 GitHub에서 `https://github.com/zoek1211/rest-api-3/tree/<태그>` 주소로 그 단계의 코드를 바로 볼 수 있다.
+- 그러면 GitHub에서 `https://github.com/zoek1211/rest-api-3/tree/<태그>`(그 시점 전체 코드)와 `https://github.com/zoek1211/rest-api-3/commit/<태그>`(그 단계에서 바뀐 코드) 주소로 바로 볼 수 있다.
+- README 단계 제목의 "코드 보기" 링크는 `/commit/<태그>`를 쓴다. 목차 표의 링크는 `/tree/<태그>`를 쓴다.
 - `/implement-spec`이 서브에이전트를 병렬로 돌려도 태그는 **통합 브랜치에 들어간 순서대로** 메인 에이전트가 단다. 그래야 번호가 겹치거나 빠지지 않는다. 같은 커밋에 태그를 두 번 달지 않는다.
 
 ## README: 단계별 학습 노트
@@ -54,7 +55,7 @@ Refs #<ticket 번호>
 태그를 달 때마다 `README.md`의 "단계별 진행" 섹션에 항목을 하나 추가하고, 같은 커밋에 넣는다.
 
 ````markdown
-### 004: <요약>  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/004)
+### 004: <요약>  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/004)
 
 **무엇을 했나**: 2–3문장
 **왜**: 핵심 이유

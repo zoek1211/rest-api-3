@@ -23,6 +23,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+// delete는 static import하지 않는다: 테스트 메서드 이름 delete()와 겹쳐 헷갈리므로 클래스 이름을 붙여 부른다.
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.matchesPattern;
@@ -377,5 +379,54 @@ class ApiV1PostControllerTest {
         mvc.perform(get("/api/v1/posts/1"))
                 .andExpect(jsonPath("$.title").value("제목 1"))
                 .andExpect(jsonPath("$.content").value("내용 1"));
+    }
+
+    @Test
+    @DisplayName("글 삭제: 댓글 3개가 달린 1번 글을 지우면 200 \"200-1\"이고, 이후 단건 조회는 404다")
+    void delete() throws Exception {
+        // 1. 요청 보내기
+        // 샘플 데이터 전제: 1번 글에는 댓글이 3개 있다. 댓글이 달린 글을 지워도 오류가 없어야 한다.
+        ResultActions resultActions = mvc
+                .perform(
+                        MockMvcRequestBuilders.delete("/api/v1/posts/1")
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        // 삭제도 "새로 생긴 것"이 없으므로 200("200-1"), 돌려줄 데이터가 없어 data는 null이다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.msg").value("1번 글이 삭제되었습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.length()").value(3));
+
+        // 정말 지워졌는지는 DB를 들여다보지 않고 같은 API(단건 조회)로 확인한다.
+        mvc.perform(get("/api/v1/posts/1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"));
+    }
+
+    @Test
+    @DisplayName("글 삭제: 없는 글이면 404 \"404-1\"")
+    void delete_notFound() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(
+                        MockMvcRequestBuilders.delete("/api/v1/posts/999")
+                )
+                .andDo(print());
+
+        // 2. 결과 검증: 단건 조회·수정과 같은 길(orElseThrow → GlobalExceptionHandler)로 404가 된다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.length()").value(3));
     }
 }

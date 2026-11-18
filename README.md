@@ -27,6 +27,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | 태그 | 내용 |
 |---|---|
 | [000](https://github.com/zoek1211/rest-api-3/tree/000) | 프로젝트 뼈대와 설정 문서 |
+| [001](https://github.com/zoek1211/rest-api-3/tree/001) | 글·댓글 엔티티와 샘플 데이터 |
 
 ## 단계별 진행
 
@@ -57,3 +58,34 @@ spring:
 ```
 
 **배운 점**: Gradle toolchain + foojay로 JDK 버전을 빌드에 고정하기 / Spring 프로필로 환경별 설정 덮어쓰기 / `@SpringBootTest`는 `@SpringBootConfiguration`을 패키지 위쪽으로 찾아 올라간다(그래서 Application 클래스는 최상위 패키지에)
+
+### 001: 글·댓글 엔티티와 샘플 데이터  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/001)
+
+**무엇을 했나**: 공통 부모 `BaseEntity`(id, 작성일, 수정일)와 글 `Post`, 댓글 `PostComment` 엔티티를 만들고, 앱이 시작될 때 글이 0개면 글 3개·댓글 5개(분배 3/2/0)를 넣는 `BaseInitData`를 추가했습니다. 아직 API가 없어서 `SampleDataTest`가 저장소로 개수와 분배, 날짜 자동 기록만 확인합니다(이후 API 테스트가 생기면 대체됩니다).
+**왜**: 이후 모든 엔드포인트 테스트가 "1번 글에 댓글 3개" 같은 샘플 데이터를 전제로 쓰기 때문에 데이터의 바닥을 먼저 깝니다. 개발 DB는 파일이라 `count() > 0` 검사가 없으면 `bootRun`마다 데이터가 쌓입니다.
+**핵심 코드**
+
+```java
+// Post.java: 연관관계의 주인은 외래 키(post_id)를 가진 PostComment.post. 이쪽은 mappedBy로 "거울"만 한다.
+@OneToMany(mappedBy = "post", cascade = {CascadeType.PERSIST, CascadeType.REMOVE}, orphanRemoval = true)
+private List<PostComment> comments = new ArrayList<>();
+
+// PostComment.java: 소속 글 필수
+@ManyToOne(fetch = FetchType.LAZY, optional = false)
+@JoinColumn(nullable = false)
+private Post post;
+
+// BaseInitData.java: 모든 프로필에서, 비어 있을 때만
+@Override
+@Transactional
+public void run(ApplicationArguments args) {
+    if (postRepository.count() > 0) return;
+    Post post1 = postRepository.save(new Post("제목 1", "내용 1"));
+    Post post2 = postRepository.save(new Post("제목 2", "내용 2"));
+    postRepository.save(new Post("제목 3", "내용 3"));
+    post1.addComment("댓글 1"); post1.addComment("댓글 2"); post1.addComment("댓글 3");
+    post2.addComment("댓글 4"); post2.addComment("댓글 5"); // 커밋 때 cascade PERSIST로 INSERT
+}
+```
+
+**배운 점**: 양방향 연관관계와 연관관계의 주인(`mappedBy`) / JPA Auditing은 `@EntityListeners` + `@EnableJpaAuditing` 둘 다 있어야 하고, 빠지면 에러 없이 null이 저장된다 / `ApplicationRunner`는 `@SpringBootTest` 컨텍스트에서도 실행된다

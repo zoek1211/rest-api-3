@@ -7,6 +7,7 @@ package com.back;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 // @SpringBootApplication = 아래 세 가지를 합친 애너테이션
 //   1) @SpringBootConfiguration : 이 클래스가 설정의 뿌리임을 표시 (테스트가 이걸 찾아 컨텍스트를 띄운다)
@@ -15,6 +16,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 // 주의: 그래서 이 클래스는 반드시 최상위 패키지(com.back)에 둔다.
 //       com.back 밖(예: com.other)에 만든 클래스는 스캔되지 않아 Bean으로 등록되지 않는다.
 @SpringBootApplication
+// @EnableJpaAuditing: JPA Auditing을 켠다. BaseEntity의 @CreatedDate·@LastModifiedDate가 자동으로 채워지게 한다.
+// 주의: 이 애너테이션이 없으면 에러 없이 조용히 날짜가 null로 저장된다 (001 단계에서 테스트로 확인).
+@EnableJpaAuditing
 public class BackApplication {
 
     public static void main(String[] args) {

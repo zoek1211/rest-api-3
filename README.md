@@ -28,6 +28,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 |---|---|
 | [000](https://github.com/zoek1211/rest-api-3/tree/000) | 프로젝트 뼈대와 설정 문서 |
 | [001](https://github.com/zoek1211/rest-api-3/tree/001) | 글·댓글 엔티티와 샘플 데이터 |
+| [002](https://github.com/zoek1211/rest-api-3/tree/002) | 글 다건 조회 GET /api/v1/posts |
 
 ## 단계별 진행
 
@@ -89,3 +90,38 @@ public void run(ApplicationArguments args) {
 ```
 
 **배운 점**: 양방향 연관관계와 연관관계의 주인(`mappedBy`) / JPA Auditing은 `@EntityListeners` + `@EnableJpaAuditing` 둘 다 있어야 하고, 빠지면 에러 없이 null이 저장된다 / `ApplicationRunner`는 `@SpringBootTest` 컨텍스트에서도 실행된다
+
+### 002: 글 다건 조회 GET /api/v1/posts  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/002)
+
+**무엇을 했나**: 첫 MockMvc 테스트 `ApiV1PostControllerTest`를 먼저 써서 실패를 확인하고(컨트롤러 없음 → 컴파일 실패, 빈 컨트롤러 → 매핑 없음), `ApiV1PostController` → `PostService` → `PostRepository` 흐름과 응답용 `PostDto` record를 만들어 통과시켰습니다. 응답은 래퍼 없는 `PostDto` 배열이고 id 내림차순(3, 2, 1)입니다.
+**왜**: 엔티티를 그대로 JSON으로 내보내면 `Post.comments ↔ PostComment.post` 순환 참조, 지연 로딩 예외, DB 구조 노출 문제가 생깁니다. 조회는 데이터 자체가 결과라 `RsData`로 감싸지 않습니다(ADR 0001).
+**핵심 코드**
+
+```java
+// ApiV1PostController.java
+@GetMapping
+public List<PostDto> getItems() {
+    return postService.findAllByOrderByIdDesc()
+            .stream()
+            .map(PostDto::new) // 엔티티 → DTO. 엔티티는 응답 밖으로 나가지 않는다.
+            .toList();
+}
+
+// ApiV1PostControllerTest.java: 1. 요청 보내기 → 2. 결과 검증
+ResultActions resultActions = mvc.perform(get("/api/v1/posts")).andDo(print());
+
+resultActions
+        .andExpect(handler().methodName("getItems"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(3));
+for (int i = 0; i < 3; i++) {
+    long id = 3 - i; // 최신순: 3, 2, 1
+    resultActions
+            .andExpect(jsonPath("$[%d].id".formatted(i)).value(id))
+            .andExpect(jsonPath("$[%d].createDate".formatted(i)).value(matchesPattern(DATE_TIME_PATTERN)))
+            .andExpect(jsonPath("$[%d].title".formatted(i)).value("제목 " + id))
+            .andExpect(jsonPath("$[%d].comments".formatted(i)).doesNotExist());
+}
+```
+
+**배운 점**: MockMvc는 서버 없이 DispatcherServlet에 요청을 넣어 HTTP 경계 전체를 검증한다 / DTO(record)로 API 계약과 엔티티 구조를 분리한다 / 테스트의 `@Transactional`은 끝나면 롤백해 테스트끼리 DB를 공유해도 서로 영향이 없다

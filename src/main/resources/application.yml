@@ -1,0 +1,58 @@
+# application.yml
+# 스프링 부트의 기본 설정 파일. 프로필과 상관없이 항상 먼저 읽힌다.
+# 프로필(profile)이란 "환경별 설정 묶음"이다. 예를 들어 test 프로필을 켜면
+# application-test.yml이 이 파일 위에 덮어써진다 (같은 키는 test 쪽 값이 이긴다).
+#
+# 왜 .properties가 아니라 .yml인가: 들여쓰기로 계층을 표현해 spring.datasource.* 같은 긴 키가 덜 반복된다.
+# 주의: YAML은 들여쓰기가 문법이다. 탭(tab)은 쓸 수 없고 공백 2칸으로 맞춘다.
+
+spring:
+  application:
+    name: back
+
+  profiles:
+    # 아무 프로필도 지정하지 않고 실행(bootRun)하면 dev 프로필이 켜진다.
+    # 테스트는 @ActiveProfiles("test")로 test 프로필을 직접 지정하므로 이 값의 영향을 받지 않는다.
+    default: dev
+
+  datasource:
+    # ── 개발용 DB: H2 파일 DB ──
+    # jdbc:h2:./db_dev → 프로젝트 폴더에 db_dev.mv.db 파일을 만들어 데이터를 저장한다.
+    #   메모리 DB와 달리 앱을 껐다 켜도 데이터가 남는다 (샘플 데이터 중복 방지 확인에 필요).
+    # MODE=MySQL → H2가 MySQL 문법·동작을 흉내 낸다. 나중에 MySQL로 옮겨도 차이가 적도록.
+    # 주의: db_dev.mv.db 파일은 .gitignore로 git에서 제외한다. 개인 개발 데이터라 공유 대상이 아니다.
+    url: jdbc:h2:./db_dev;MODE=MySQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  h2:
+    console:
+      # H2 콘솔: 브라우저에서 http://localhost:8080/h2-console 로 접속해 테이블과 데이터를 볼 수 있다.
+      # 접속 화면의 JDBC URL 칸에 위 url(jdbc:h2:./db_dev;MODE=MySQL)을 그대로 넣는다.
+      # 주의: 콘솔은 DB를 그대로 노출하므로 운영 환경에서는 절대 켜지 않는다.
+      enabled: true
+
+  jpa:
+    hibernate:
+      # ddl-auto: 엔티티 클래스를 보고 테이블을 어떻게 다룰지 정한다.
+      #   create   : 시작할 때마다 테이블을 지우고 새로 만든다 (데이터 사라짐)
+      #   update   : 바뀐 부분만 반영한다 (기존 데이터 유지)
+      #   validate : 엔티티와 테이블이 맞는지 검사만 한다 (운영에서 주로 사용)
+      # 개발 중엔 엔티티가 자주 바뀌고, 파일 DB 데이터는 유지하고 싶으므로 update.
+      ddl-auto: update
+    properties:
+      hibernate:
+        # 실행되는 SQL을 로그로 보기 좋게 출력한다. JPA가 실제로 어떤 쿼리를 날리는지 배우기 위함.
+        format_sql: true
+        highlight_sql: true
+        use_sql_comments: true
+    # open-in-view: 기본값 true면 HTTP 응답이 끝날 때까지 DB 연결(영속성 컨텍스트)을 붙잡고 있다.
+    # 컨트롤러·JSON 변환 중에도 지연 로딩이 몰래 일어나 쿼리 위치를 알기 어려워지므로 끈다.
+    open-in-view: false
+
+logging:
+  level:
+    # SQL 문장을 DEBUG 로그로, 바인딩 값(? 자리의 실제 값)을 TRACE 로그로 보여 준다.
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE

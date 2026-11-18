@@ -1,0 +1,47 @@
+# .gitignore: git이 추적하지 않을 파일 목록.
+# 빌드 결과물과 개인 개발 DB처럼 "다시 만들 수 있거나, 사람마다 다른 것"은 올리지 않는다.
+
+### Gradle 빌드 산출물 ###
+# .gradle/ : Gradle 캐시, build/ : 컴파일된 클래스·테스트 리포트·jar
+.gradle
+build/
+# 주의: wrapper jar는 ./gradlew 실행에 꼭 필요하므로 예외로 포함한다.
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### H2 개발 DB 파일 ###
+# application.yml의 jdbc:h2:./db_dev 가 만드는 파일들 (db_dev.mv.db, db_dev.trace.db 등)
+db_dev*
+*.mv.db
+*.trace.db
+
+### Spring Initializr 안내 파일 ###
+HELP.md
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### VS Code ###
+.vscode/
+
+### macOS ###
+.DS_Store

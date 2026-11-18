@@ -34,6 +34,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [005](https://github.com/zoek1211/rest-api-3/tree/005) | 글 수정 PUT /api/v1/posts/{id} |
 | [006](https://github.com/zoek1211/rest-api-3/tree/006) | 글 삭제 DELETE /api/v1/posts/{id} |
 | [007](https://github.com/zoek1211/rest-api-3/tree/007) | 댓글 다건 조회 GET /api/v1/posts/{postId}/comments |
+| [008](https://github.com/zoek1211/rest-api-3/tree/008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
 
 ## 단계별 진행
 
@@ -283,3 +284,31 @@ public class ApiV1PostCommentController {
 ```
 
 **배운 점**: 소속이 필수인 자원은 경로를 중첩해 표현한다(`/posts/{postId}/comments`) / "없는 글"(404)과 "댓글 없는 글"(200 + `[]`)은 다르다 / LAZY 연관의 프록시는 `getId()`만으로는 SELECT를 하지 않지만, 컬렉션은 트랜잭션 밖에서 처음 읽으면 `LazyInitializationException`이 난다
+
+### 008: 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/008)
+
+**무엇을 했나**: `/posts/1/comments/1`이 200과 모든 필드(id, 날짜 2개, `postId`=1, `content`="댓글 1", 필드 정확히 5개)를 돌려준다는 테스트를 먼저 써서 실패(매핑이 없어 핸들러가 `ResourceHttpRequestHandler`)를 확인한 뒤, `ApiV1PostCommentController.getItem`과 `PostService.findCommentById`로 통과시켰습니다. 없는 댓글, 다른 글의 댓글(`/posts/1/comments/4`), 없는 글이 모두 404라는 테스트도 추가했습니다(구현이 이미 처리해서 바로 통과).
+**왜**: 댓글을 id만으로 찾으면 2번 글의 4번 댓글이 `/posts/1/comments/4`로 보여 버립니다. 글을 먼저 찾고 **그 글의 댓글 중에서** 찾으면 소속 검사를 따로 쓸 필요가 없어 빠뜨릴 수도 없습니다. 세 경우 모두 클라이언트에게는 "이 주소에 댓글이 없다"이므로 같은 404(`404-1`)로 답합니다.
+**핵심 코드**
+
+```java
+// PostService.java
+@Transactional(readOnly = true)
+public PostComment findCommentById(long postId, long id) {
+    Post post = postRepository.findById(postId).orElseThrow(); // 없는 글 → 404
+
+    return post.getComments()                  // 이 글의 댓글 중에서만 찾는다
+            .stream()
+            .filter(comment -> comment.getId() == id)
+            .findFirst()
+            .orElseThrow();                    // 없는 댓글, 다른 글의 댓글 → 404
+}
+
+// ApiV1PostCommentController.java
+@GetMapping("/{id}") // 클래스의 /api/v1/posts/{postId}/comments 뒤에 붙는다
+public PostCommentDto getItem(@PathVariable long postId, @PathVariable long id) {
+    return new PostCommentDto(postService.findCommentById(postId, id));
+}
+```
+
+**배운 점**: 중첩 자원의 단건 조회는 "부모에 속하는지"까지 확인해야 한다 / 부모에서 자식을 꺼내는 구조로 만들면 소속 검사가 저절로 된다 / 클래스 수준 경로 변수와 메서드 수준 경로 변수를 함께 `@PathVariable`로 받는다

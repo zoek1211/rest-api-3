@@ -66,6 +66,24 @@ public class PostService {
                 .toList();
     }
 
+    // 글의 댓글 하나. 글이 없거나, 댓글이 없거나, 댓글이 "다른 글" 소속이면 모두 NoSuchElementException → 404.
+    @Transactional(readOnly = true)
+    public PostComment findCommentById(long postId, long id) {
+        Post post = postRepository.findById(postId).orElseThrow();
+
+        // 왜 "글의 댓글 목록 안에서" 찾나: 댓글 id만으로 찾으면 /posts/1/comments/4처럼
+        //   2번 글의 댓글이 1번 글 주소로 보여 버린다. 글의 댓글 중에서 찾으면 소속 검사가 저절로 된다.
+        // 주의: 댓글 저장소에서 findById(id)로 찾았다면 comment.getPost().getId() == postId 검사를 따로 해야 한다.
+        //   빠뜨리기 쉬운 검사라, 아예 "글에서 꺼내는" 구조로 실수할 여지를 없앴다.
+        // 대안: 글의 댓글을 모두 읽는 대신 PostCommentRepository.findByPostIdAndId(postId, id) 한 번의 쿼리.
+        //   댓글이 많아지면 그쪽이 낫지만, 지금은 댓글 저장소가 없고 샘플 규모라 단순한 쪽을 택했다.
+        return post.getComments()
+                .stream()
+                .filter(comment -> comment.getId() == id)
+                .findFirst() // Optional<PostComment>: 못 찾으면 비어 있다
+                .orElseThrow();
+    }
+
     // 쓰기 메서드라 readOnly 없이 @Transactional. 메서드가 끝나면 커밋(예외가 나면 롤백)된다.
     @Transactional
     public Post write(String title, String content) {

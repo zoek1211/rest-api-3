@@ -36,4 +36,12 @@ public class ApiV1PostCommentController {
                 .map(PostCommentDto::new) // 엔티티 → DTO
                 .toList();
     }
+
+    // GET /api/v1/posts/{postId}/comments/{id}: 댓글 단건 조회.
+    // 경로 변수 두 개를 모두 받는다. 클래스 수준의 {postId}와 메서드 수준의 {id}가 합쳐진 경로다.
+    // 없는 글, 없는 댓글, 다른 글의 댓글은 모두 같은 404("404-1"). 클라이언트 입장에서는 셋 다 "이 주소에 댓글이 없다"이다.
+    @GetMapping("/{id}")
+    public PostCommentDto getItem(@PathVariable long postId, @PathVariable long id) {
+        return new PostCommentDto(postService.findCommentById(postId, id));
+    }
 }

@@ -109,4 +109,59 @@ class ApiV1PostCommentControllerTest {
                 .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
                 .andExpect(jsonPath("$.data").value(nullValue()));
     }
+
+    @Test
+    @DisplayName("댓글 단건 조회: 1번 글의 1번 댓글이 모든 필드와 함께 온다")
+    void getItem() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(get("/api/v1/posts/1/comments/1"))
+                .andDo(print());
+
+        // 2. 결과 검증
+        // ADR 0001: 조회는 RsData 없이 DTO 그대로. 다건 조회의 배열 원소와 같은 모양(PostCommentDto)이다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("getItem"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.createDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.modifyDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.postId").value(1))
+                .andExpect(jsonPath("$.content").value("댓글 1"))
+                .andExpect(jsonPath("$.post").doesNotExist())
+                .andExpect(jsonPath("$.length()").value(5));
+    }
+
+    // 단건 조회의 404 세 가지. 모두 같은 RsData 에러 모양(ADR 0001)이라 검증을 한곳에 모았다.
+    private void expectGetItemNotFound(String url) throws Exception {
+        mvc
+                .perform(get(url))
+                .andDo(print())
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("getItem"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("댓글 단건 조회: 없는 댓글이면 404")
+    void getItem_commentNotFound() throws Exception {
+        expectGetItemNotFound("/api/v1/posts/1/comments/%d".formatted(Integer.MAX_VALUE));
+    }
+
+    @Test
+    @DisplayName("댓글 단건 조회: 다른 글의 댓글이면 404 (4번 댓글은 2번 글 소속)")
+    void getItem_commentOfOtherPost() throws Exception {
+        // 4번 댓글은 존재한다. 하지만 1번 글의 댓글이 아니므로 /posts/1/comments/4 라는 자원은 없다.
+        expectGetItemNotFound("/api/v1/posts/1/comments/4");
+    }
+
+    @Test
+    @DisplayName("댓글 단건 조회: 없는 글이면 404")
+    void getItem_postNotFound() throws Exception {
+        expectGetItemNotFound("/api/v1/posts/%d/comments/1".formatted(Integer.MAX_VALUE));
+    }
 }

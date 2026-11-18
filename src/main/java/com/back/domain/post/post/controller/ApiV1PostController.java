@@ -11,6 +11,7 @@ import com.back.domain.post.post.dto.PostDto;
 import com.back.domain.post.post.service.PostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,5 +35,15 @@ public class ApiV1PostController {
                 .stream()
                 .map(PostDto::new) // 엔티티 → DTO. 엔티티는 응답 밖으로 나가지 않는다.
                 .toList();
+    }
+
+    // GET /api/v1/posts/{id}: 글 단건 조회.
+    // @PathVariable: URL 경로의 {id} 자리 값을 메서드 인자로 받는다. "/posts/1"이면 id = 1.
+    //   (?id=1 같은 쿼리 문자열은 @RequestParam. "어떤 자원 하나"를 가리킬 때는 경로에 넣는 게 REST 관례다.)
+    // 없는 글이면 서비스가 예외를 던지고, 이 메서드는 거기서 끝난다.
+    //   404 응답을 만드는 일은 GlobalExceptionHandler가 맡으므로 여기엔 if/null 검사가 없다.
+    @GetMapping("/{id}")
+    public PostDto getItem(@PathVariable long id) {
+        return new PostDto(postService.findById(id));
     }
 }

@@ -33,4 +33,15 @@ public class PostService {
         // createDate로 정렬하지 않는 이유: 같은 밀리초에 저장된 글은 순서가 뒤섞일 수 있지만 id는 항상 유일하다.
         return postRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
     }
+
+    @Transactional(readOnly = true)
+    public Post findById(long id) {
+        // findById는 Optional<Post>를 돌려준다. "없을 수도 있다"를 타입으로 드러내는 상자다.
+        // orElseThrow(): 값이 있으면 꺼내고, 없으면 NoSuchElementException을 던진다.
+        // 주의: optional.get()도 없으면 같은 예외를 던지지만, "없을 수 있음을 알고 처리했다"는 의도가
+        //   드러나지 않아 orElseThrow()를 쓴다.
+        // 왜 null을 반환하지 않나: 호출하는 쪽마다 null 검사를 해야 하고, 빠뜨리면 엉뚱한 곳에서
+        //   NullPointerException이 난다. 예외를 던지면 GlobalExceptionHandler 한 곳에서 404로 바꿀 수 있다.
+        return postRepository.findById(id).orElseThrow();
+    }
 }

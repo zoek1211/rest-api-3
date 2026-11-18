@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.handler;
@@ -78,5 +79,50 @@ class ApiV1PostControllerTest {
                     // PostDto 필드는 정확히 5개: id, createDate, modifyDate, title, content
                     .andExpect(jsonPath("$[%d].length()".formatted(i)).value(5));
         }
+    }
+
+    @Test
+    @DisplayName("글 단건 조회: 1번 글이 DTO 그대로(래퍼 없이) 온다")
+    void getItem() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(get("/api/v1/posts/1"))
+                .andDo(print());
+
+        // 2. 결과 검증
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("getItem"))
+                .andExpect(status().isOk())
+                // 단건 조회도 ADR 0001에 따라 RsData 없이 PostDto 객체 그대로다.
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.createDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.modifyDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.title").value("제목 1"))
+                .andExpect(jsonPath("$.content").value("내용 1"))
+                .andExpect(jsonPath("$.length()").value(5));
+    }
+
+    @Test
+    @DisplayName("글 단건 조회: 없는 글이면 404와 공통 에러 형식(RsData)이 온다")
+    void getItem_notFound() throws Exception {
+        // 1. 요청 보내기: 샘플 글은 1·2·3번뿐이라 999번은 없다
+        ResultActions resultActions = mvc
+                .perform(get("/api/v1/posts/999"))
+                .andDo(print());
+
+        // 2. 결과 검증
+        // ADR 0001 Consequences: HTTP 상태와 resultCode를 둘 다 보고 서로 맞는지 확인한다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("getItem"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                // 주의: jsonPath("$.data").doesNotExist()는 "키가 아예 없음"과 "값이 null"을 구분하지 않는다.
+                //   spec은 "data: null"(키는 있고 값이 null)이므로 value(nullValue())로 값을 보고,
+                //   아래 length() == 3으로 키 3개(resultCode, msg, data)가 모두 있는지 확인한다.
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.length()").value(3));
     }
 }

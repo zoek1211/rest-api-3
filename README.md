@@ -29,6 +29,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [000](https://github.com/zoek1211/rest-api-3/tree/000) | 프로젝트 뼈대와 설정 문서 |
 | [001](https://github.com/zoek1211/rest-api-3/tree/001) | 글·댓글 엔티티와 샘플 데이터 |
 | [002](https://github.com/zoek1211/rest-api-3/tree/002) | 글 다건 조회 GET /api/v1/posts |
+| [003](https://github.com/zoek1211/rest-api-3/tree/003) | 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리 |
 
 ## 단계별 진행
 
@@ -125,3 +126,35 @@ for (int i = 0; i < 3; i++) {
 ```
 
 **배운 점**: MockMvc는 서버 없이 DispatcherServlet에 요청을 넣어 HTTP 경계 전체를 검증한다 / DTO(record)로 API 계약과 엔티티 구조를 분리한다 / 테스트의 `@Transactional`은 끝나면 롤백해 테스트끼리 DB를 공유해도 서로 영향이 없다
+
+### 003: 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/003)
+
+**무엇을 했나**: `GET /posts/1`(200, 모든 필드)과 `GET /posts/999`(404) 테스트를 먼저 써서 실패를 확인했습니다(매핑 없음 → `ResourceHttpRequestHandler`, 예외 처리기 없음 → `ServletException`으로 터짐). `getItem` + `PostService.findById`(`orElseThrow()`)로 성공 케이스를, 공통 응답 봉투 `RsData{resultCode, msg, data}`와 `GlobalExceptionHandler`로 404 케이스를 통과시켰습니다.
+**왜**: 컨트롤러마다 try-catch로 404를 만들면 코드가 복사되고 응답 모양이 어긋나기 쉽습니다. 서비스는 예외만 던지고, 에러 응답은 `@RestControllerAdvice` 한 곳에서 같은 형식으로 만듭니다. 상태 코드는 `ResponseAspect`가 생기기 전까지 핸들러가 `ResponseEntity`로 직접 정합니다.
+**핵심 코드**
+
+```java
+// PostService.java
+public Post findById(long id) {
+    return postRepository.findById(id).orElseThrow(); // 없으면 NoSuchElementException
+}
+
+// GlobalExceptionHandler.java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<RsData<Void>> handle(NoSuchElementException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new RsData<>("404-1", "해당 데이터가 존재하지 않습니다."));
+    }
+}
+
+// ApiV1PostControllerTest.java: 상태와 resultCode를 둘 다 본다 (ADR 0001)
+mvc.perform(get("/api/v1/posts/999"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.resultCode").value("404-1"))
+        .andExpect(jsonPath("$.data").value(nullValue()));
+```
+
+**배운 점**: `@PathVariable`로 URL 경로 값을 받는다 / `Optional.orElseThrow()`로 "없음"을 예외로 바꾸고 `@RestControllerAdvice` + `@ExceptionHandler`에서 한 번에 HTTP 응답으로 변환한다 / 처리기가 없으면 MockMvc에서는 예외가 `ServletException`으로 그대로 튀어나온다

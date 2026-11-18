@@ -16,6 +16,7 @@ import com.back.domain.post.postComment.entity.PostComment;
 import com.back.global.rsData.RsData;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -89,6 +90,20 @@ public class ApiV1PostCommentController {
         return new RsData<>(
                 "200-1",
                 "%d번 댓글이 수정되었습니다.".formatted(id)
+        );
+    }
+
+    // DELETE /api/v1/posts/{postId}/comments/{id}: 댓글 삭제. spec #1의 마지막(10번째) 엔드포인트.
+    // 글 삭제(ApiV1PostController.delete)와 같은 틀이다:
+    //   - 본문이 없으니 @RequestBody·@Valid도 없다. 실패는 404("404-1") 하나뿐.
+    //   - 성공: 200 + "200-1", data는 null. 지운 댓글은 더 보여 줄 것이 없다.
+    @DeleteMapping("/{id}")
+    public RsData<Void> delete(@PathVariable long postId, @PathVariable long id) {
+        postService.deleteComment(postId, id);
+
+        return new RsData<>(
+                "200-1",
+                "%d번 댓글이 삭제되었습니다.".formatted(id)
         );
     }
 }

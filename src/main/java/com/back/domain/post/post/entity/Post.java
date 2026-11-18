@@ -66,4 +66,14 @@ public class Post extends BaseEntity {
         comments.add(comment);
         return comment;
     }
+
+    // 댓글 삭제: 리스트에서 빼기만 한다. DELETE SQL도, 저장소의 delete()도 여기엔 없다.
+    // orphanRemoval = true 덕분에, 영속 상태인 글의 comments에서 빠진 댓글(고아)은 flush 때 JPA가 DELETE한다.
+    //   "글의 댓글 목록에서 빠졌다 = 소속 글이 없다 = 존재할 수 없다"를 JPA가 대신 지켜 준다.
+    // 왜 PostCommentRepository.delete(comment)가 아닌가: 댓글은 언제나 글을 통해서만 다룬다(addComment와 짝).
+    //   저장소로 직접 지우면 comments 리스트에는 지운 댓글이 남아, 같은 트랜잭션에서 목록을 읽을 때 어긋난다.
+    // 주의: orphanRemoval이 없으면 리스트에서 빼도 DB에는 아무 일도 일어나지 않는다(mappedBy 쪽은 주인이 아니므로).
+    public void removeComment(PostComment comment) {
+        comments.remove(comment);
+    }
 }

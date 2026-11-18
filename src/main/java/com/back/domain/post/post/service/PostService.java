@@ -181,4 +181,18 @@ public class PostService {
         //   FK 위반 같은 DB 오류가 응답이 끝난 뒤(롤백 시점)로 숨어 버린다. 지금 실행해서 오류가 있으면 바로 드러나게 한다.
         postRepository.flush();
     }
+
+    // 댓글 삭제. 없는 글·없는 댓글·다른 글의 댓글은 모두 NoSuchElementException → 404("404-1").
+    @Transactional
+    public void deleteComment(long postId, long id) {
+        // 수정(modifyComment)과 같이 findCommentById로 찾는다. 글의 댓글 목록 안에서 찾으므로
+        //   /posts/1/comments/4(2번 글의 댓글) 삭제는 404이고, 2번 글의 댓글은 지워지지 않는다.
+        PostComment comment = findCommentById(postId, id);
+
+        // 글의 댓글 목록에서 뺀다. 실제 DELETE는 orphanRemoval이 만든다(Post.removeComment 주석).
+        comment.getPost().removeComment(comment);
+
+        // flush(): 글 삭제와 같은 이유. 바깥 트랜잭션이 있어도 DELETE SQL을 지금 실행한다.
+        postRepository.flush();
+    }
 }

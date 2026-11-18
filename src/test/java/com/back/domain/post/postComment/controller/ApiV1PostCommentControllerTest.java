@@ -20,6 +20,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.greaterThan;
@@ -95,6 +96,23 @@ class ApiV1PostCommentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("댓글 다건 조회: 2번 글의 댓글은 4·5번 2개다")
+    void getItems_secondPost() throws Exception {
+        // 샘플 데이터의 댓글 분배는 1번 글 3개, 2번 글 2개, 3번 글 0개(3/2/0)다.
+        // getItems(3개)·getItems_emptyPost(0개)와 이 테스트(2개)로 분배 전체를 HTTP만으로 확인한다.
+        //   그래서 저장소를 직접 보던 임시 테스트(SampleDataTest)는 011에서 지웠다.
+        mvc
+                .perform(get("/api/v1/posts/2/comments"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(5))
+                .andExpect(jsonPath("$[1].id").value(4))
+                .andExpect(jsonPath("$[0].postId").value(2))
+                .andExpect(jsonPath("$[1].postId").value(2));
     }
 
     @Test
@@ -375,5 +393,74 @@ class ApiV1PostCommentControllerTest {
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").value(not("남의 글 댓글 수정")));
+    }
+
+    @Test
+    @DisplayName("댓글 삭제: 1번 글의 1번 댓글을 지우면 단건 조회는 404, 1번 글의 댓글은 2개가 된다")
+    void delete() throws Exception {
+        // 1. 요청 보내기
+        // MockMvcRequestBuilders.delete를 static import하지 않는 이유: 테스트 메서드 이름 delete()와 헷갈리지 않게.
+        ResultActions resultActions = mvc
+                .perform(MockMvcRequestBuilders.delete("/api/v1/posts/1/comments/1"))
+                .andDo(print());
+
+        // 2. 결과 검증
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.msg").value("1번 댓글이 삭제되었습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+
+        // 3. 다시 조회: 지운 댓글은 404, 남은 댓글은 3·2번 2개.
+        expectGetItemNotFound("/api/v1/posts/1/comments/1");
+
+        mvc
+                .perform(get("/api/v1/posts/1/comments"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(3))
+                .andExpect(jsonPath("$[1].id").value(2));
+    }
+
+    @Test
+    @DisplayName("댓글 삭제: 없는 댓글이면 404")
+    void delete_commentNotFound() throws Exception {
+        mvc
+                .perform(MockMvcRequestBuilders.delete("/api/v1/posts/1/comments/999"))
+                .andDo(print())
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("댓글 삭제: 다른 글의 댓글이면 404이고, 그 댓글은 지워지지 않는다")
+    void delete_commentOfOtherPost() throws Exception {
+        // 1. 요청 보내기: 4번 댓글은 2번 글의 댓글이다. 1번 글의 주소로 삭제를 시도한다.
+        ResultActions resultActions = mvc
+                .perform(MockMvcRequestBuilders.delete("/api/v1/posts/1/comments/4"))
+                .andDo(print());
+
+        // 2. 결과 검증
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+
+        // 3. 다시 조회: 2번 글의 댓글은 여전히 2개다.
+        mvc
+                .perform(get("/api/v1/posts/2/comments"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
     }
 }

@@ -37,6 +37,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [008](https://github.com/zoek1211/rest-api-3/tree/008) | 댓글 단건 조회 GET /api/v1/posts/{postId}/comments/{id} |
 | [009](https://github.com/zoek1211/rest-api-3/tree/009) | 댓글 작성 POST /api/v1/posts/{postId}/comments |
 | [010](https://github.com/zoek1211/rest-api-3/tree/010) | 댓글 수정 PUT /api/v1/posts/{postId}/comments/{id} |
+| [011](https://github.com/zoek1211/rest-api-3/tree/011) | 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} 와 전체 정리 |
 
 ## 단계별 진행
 
@@ -372,3 +373,62 @@ public RsData<Void> modify(@PathVariable long postId, @PathVariable long id,
 ```
 
 **배운 점**: 변경 감지는 cascade 대상인 하위 엔티티(댓글)에도 똑같이 동작한다 / 같은 클래스 안의 `this.method()` 호출은 프록시를 거치지 않아 그 메서드의 `@Transactional(readOnly = true)`가 적용되지 않는다 / 작성과 수정은 규칙이 같아도 요청 DTO를 나눈다
+
+### 011: 댓글 삭제 DELETE /api/v1/posts/{postId}/comments/{id} 와 전체 정리  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/011)
+
+**무엇을 했나**: 1번 글의 1번 댓글을 삭제하면 200·`"200-1"`·`"1번 댓글이 삭제되었습니다."`·`data: null`이 오고, 이어서 단건 조회는 404, 1번 글의 댓글 목록은 2개라는 테스트를 먼저 써서 실패(핸들러 없음)를 확인한 뒤, `Post.removeComment`, `PostService.deleteComment`, `ApiV1PostCommentController.delete`로 통과시켰습니다. 없는 댓글 404, 다른 글의 댓글 404(그 글의 댓글은 그대로 2개) 테스트도 추가했습니다. 또 2번 글의 댓글이 2개라는 목록 테스트를 더해 샘플 데이터 분배(3/2/0)가 모두 HTTP 테스트로 확인되므로, 001부터 남겨 둔 임시 저장소 테스트 `SampleDataTest`를 지웠습니다.
+**왜**: 댓글은 글 없이 존재할 수 없으므로 저장소로 직접 지우지 않고 "글의 댓글 목록에서 뺀다". 그러면 `orphanRemoval = true`가 빠진 댓글(고아)을 DELETE한다. 찾기는 수정과 같이 `findCommentById`를 재사용해 소속 검사가 저절로 되고, `flush()`로 DELETE SQL을 응답 전에 실행한다.
+**핵심 코드**
+
+```java
+// Post.java
+// orphanRemoval = true: comments에서 빠진 댓글은 flush 때 DELETE된다
+public void removeComment(PostComment comment) {
+    comments.remove(comment);
+}
+
+// PostService.java
+@Transactional
+public void deleteComment(long postId, long id) {
+    PostComment comment = findCommentById(postId, id); // 다른 글의 댓글이면 404
+    comment.getPost().removeComment(comment);          // 목록에서 빼기만 한다
+    postRepository.flush();                            // 지금 DELETE (테스트 트랜잭션 안에서도)
+}
+
+// ApiV1PostCommentController.java
+@DeleteMapping("/{id}")
+public RsData<Void> delete(@PathVariable long postId, @PathVariable long id) {
+    postService.deleteComment(postId, id);
+    return new RsData<>("200-1", "%d번 댓글이 삭제되었습니다.".formatted(id));
+}
+```
+
+**배운 점**: `orphanRemoval`은 "컬렉션에서 빠짐 = 삭제"이고, `cascade REMOVE`는 "부모 삭제 = 자식 삭제"다 / `mappedBy` 쪽 컬렉션만 바꾸면 원래 DB에 아무 일도 없지만, `orphanRemoval`이 그 변경을 DELETE로 바꿔 준다 / 임시 테스트는 같은 사실을 공개 경계(HTTP)에서 확인할 수 있게 되면 지운다
+
+#### 전체 정리: spec #1 완료
+
+이 단계로 spec #1의 엔드포인트 10개가 모두 완성되었습니다. 모든 동작은 `MockMvc`로 HTTP 경계에서만 검증합니다(테스트 30개).
+
+| 메서드 | 경로 | 성공 응답 | 실패 |
+|---|---|---|---|
+| GET | `/api/v1/posts` | 200, 글 DTO 배열(최신순) | |
+| GET | `/api/v1/posts/{id}` | 200, 글 DTO | 404 |
+| POST | `/api/v1/posts` | 201, `"201-1"` + 글 DTO | 400 |
+| PUT | `/api/v1/posts/{id}` | 200, `"200-1"`, `data: null` | 400, 404 |
+| DELETE | `/api/v1/posts/{id}` | 200, `"200-1"`, `data: null` (댓글도 함께 삭제) | 404 |
+| GET | `/api/v1/posts/{postId}/comments` | 200, 댓글 DTO 배열(최신순, 없으면 `[]`) | 404 |
+| GET | `/api/v1/posts/{postId}/comments/{id}` | 200, 댓글 DTO | 404 |
+| POST | `/api/v1/posts/{postId}/comments` | 201, `"201-1"` + 댓글 DTO | 400, 404 |
+| PUT | `/api/v1/posts/{postId}/comments/{id}` | 200, `"200-1"`, `data: null` | 400, 404 |
+| DELETE | `/api/v1/posts/{postId}/comments/{id}` | 200, `"200-1"`, `data: null` | 404 |
+
+**단계를 거치며 배운 것**
+
+- **계층 구조**: 요청 → 컨트롤러(HTTP 입출력) → 서비스(트랜잭션·규칙) → 저장소/엔티티(DB). 엔티티는 밖으로 내보내지 않고 DTO로 바꾼다(002, 007).
+- **응답 모양**(ADR 0001): 조회는 DTO 그대로, 쓰기와 오류는 `RsData(resultCode, msg, data)`. HTTP 상태 코드는 `ResponseAspect`가 `resultCode` 앞자리에서 정한다(004).
+- **오류 처리**: 서비스는 `orElseThrow()`로 예외만 던지고, `GlobalExceptionHandler`가 404·400 응답으로 바꾼다(003, 004). 그래서 뒤 단계의 실패 테스트는 대부분 바로 통과했다.
+- **검증**: `@RequestBody @Valid` + 요청 DTO(record)의 `@NotBlank`·`@Size`. 작성·수정은 규칙이 같아도 DTO를 나눈다(004, 009, 010).
+- **JPA**: 연관관계의 주인과 `mappedBy`(001), JPA Auditing(001), 변경 감지로 수정(005), `cascade PERSIST`로 댓글 저장(009), `cascade REMOVE`로 글과 함께 댓글 삭제(006), `orphanRemoval`로 댓글 삭제(011), LAZY 로딩과 `open-in-view: false`(007).
+- **트랜잭션과 `flush()`**: `@Transactional` 테스트는 커밋하지 않으므로, 쓰기 서비스에서 `flush()`로 SQL을 앞당겨야 id·`modifyDate`·FK 오류가 응답 시점에 드러난다(005, 006, 009). 같은 클래스 안의 자기 호출에는 `@Transactional`이 적용되지 않는다(010).
+- **하위 자원**: 댓글은 `/posts/{postId}/comments`로 중첩하고, "글의 댓글 목록 안에서 찾기"로 다른 글의 댓글을 404로 만든다(007, 008).
+- **TDD**: 매 단계 실패하는 HTTP 테스트를 먼저 쓰고(red, 주로 "핸들러 없음"), 최소 구현으로 통과(green)시켰다.

@@ -24,7 +24,7 @@
 **메시지 형식**
 
 ```
-<type>: <한 줄 요약>
+<태그> <type>: <한 줄 요약>
 
 ## 무엇을 했나
 - 변경 사항 목록
@@ -38,7 +38,7 @@
 Refs #<ticket 번호>
 ```
 
-`type`은 `feat`, `fix`, `refactor`, `test`, `docs`, `chore` 중 하나.
+`type`은 `feat`, `fix`, `refactor`, `test`, `docs`, `chore` 중 하나. 제목 맨 앞에는 이 커밋에 달 태그 번호를 붙인다. 예: `005 feat: 글 수정 PUT /api/v1/posts/{id}`
 
 **태그 규칙**
 

@@ -52,6 +52,15 @@ public class Post extends BaseEntity {
         this.content = content;
     }
 
+    // 글 수정: 필드 값만 바꾼다. save()도 UPDATE SQL도 여기엔 없다.
+    // 왜 setter(@Setter) 대신 modify()인가: "제목과 본문은 함께 바뀐다"는 규칙을 메서드 하나로 드러내고,
+    //   아무 곳에서나 필드를 하나씩 바꾸지 못하게 하기 위해서다.
+    // 실제 DB 반영은 PostService.modify()의 주석(변경 감지, dirty checking)을 보자.
+    public void modify(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+
     public PostComment addComment(String content) {
         PostComment comment = new PostComment(this, content);
         comments.add(comment);

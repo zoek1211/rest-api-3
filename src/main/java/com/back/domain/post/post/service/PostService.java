@@ -52,4 +52,31 @@ public class PostService {
         //   createDate·modifyDate도 저장 직전에 JPA Auditing이 채운다.
         return postRepository.save(new Post(title, content));
     }
+
+    // 글 수정. 없는 글이면 findById와 같이 NoSuchElementException → GlobalExceptionHandler가 404로 바꾼다.
+    @Transactional
+    public void modify(long id, String title, String content) {
+        Post post = postRepository.findById(id).orElseThrow();
+
+        post.modify(title, content);
+
+        // 주의: 여기에 postRepository.save(post)가 없는 것은 실수가 아니다.
+        // 변경 감지(dirty checking):
+        //   1. findById로 읽은 엔티티는 "영속성 컨텍스트"(트랜잭션 동안 JPA가 엔티티를 기억해 두는 1차 캐시)에
+        //      들어가고, JPA는 읽은 순간의 값을 스냅샷으로 따로 저장해 둔다.
+        //   2. 트랜잭션이 커밋되기 직전(flush 시점)에 JPA가 엔티티의 현재 값과 스냅샷을 비교한다.
+        //   3. 다른 필드가 있으면 UPDATE SQL을 자동으로 만들어 실행한다.
+        //   그래서 "트랜잭션 안에서 읽은 엔티티는 값만 바꾸면 저장된다".
+        // 주의: 이것은 @Transactional 안에서만 동작한다. 트랜잭션 밖에서 바꾼 엔티티(준영속 상태)는 아무도 비교하지
+        //   않으므로 UPDATE가 나가지 않는다. readOnly = true 트랜잭션도 스냅샷을 만들지 않아 변경 감지를 하지 않는다.
+        // modifyDate도 이때 갱신된다: UPDATE 직전에 JPA Auditing(@LastModifiedDate)이 현재 시각을 넣는다.
+
+        // flush(): "커밋 직전"까지 기다리지 않고, 변경 감지 → UPDATE를 지금 바로 실행한다(커밋은 아니다).
+        // 왜 필요한가: 이 메서드를 감싸는 더 바깥 트랜잭션이 있으면(예: @Transactional 테스트), 이 메서드가 끝나도
+        //   커밋되지 않아 flush도, @LastModifiedDate 갱신도 일어나지 않는다. 그 상태로 같은 트랜잭션에서 단건 조회를 하면
+        //   findById는 영속성 컨텍스트(1차 캐시)의 엔티티를 SQL 없이 그대로 돌려주므로, 옛 modifyDate가 보인다.
+        //   지금 flush해 두면 "수정 API가 끝난 시점에 modifyDate는 이미 갱신되어 있다"가 항상 성립한다.
+        // 주의: flush를 해도 롤백은 여전히 가능하다. 실행된 UPDATE는 트랜잭션이 끝날 때 커밋되거나 롤백된다.
+        postRepository.flush();
+    }
 }

@@ -8,6 +8,7 @@ package com.back.domain.post.post.controller;
 //   기존 클라이언트(v1)를 깨지 않고 새 버전을 낼 수 있다(API 버저닝).
 
 import com.back.domain.post.post.dto.PostDto;
+import com.back.domain.post.post.dto.PostModifyReqBody;
 import com.back.domain.post.post.dto.PostWriteReqBody;
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -71,6 +73,26 @@ public class ApiV1PostController {
                 "201-1",
                 "%d번 글이 작성되었습니다.".formatted(post.getId()),
                 new PostDto(post)
+        );
+    }
+
+    // PUT /api/v1/posts/{id}: 글 수정.
+    // PUT은 "이 자원을 보낸 내용 전체로 바꿔라"라는 뜻이라, 제목과 본문을 둘 다 받는다.
+    //   (일부 필드만 고치는 PATCH는 spec 범위 밖.) 같은 PUT을 여러 번 보내도 결과가 같다(멱등성).
+    // 검증 실패(400)와 없는 글(404)은 작성·단건 조회와 똑같이 GlobalExceptionHandler가 처리한다.
+    //
+    // 반환: 수정은 "새로 생긴 것"이 없으니 201이 아니라 200("200-1")이고, 돌려줄 데이터도 없어 data는 null이다.
+    //   RsData의 2개 인자 생성자가 data를 null로 채운다.
+    @PutMapping("/{id}")
+    public RsData<Void> modify(
+            @PathVariable long id,
+            @RequestBody @Valid PostModifyReqBody reqBody
+    ) {
+        postService.modify(id, reqBody.title(), reqBody.content());
+
+        return new RsData<>(
+                "200-1",
+                "%d번 글이 수정되었습니다.".formatted(id)
         );
     }
 }

@@ -31,6 +31,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [002](https://github.com/zoek1211/rest-api-3/tree/002) | 글 다건 조회 GET /api/v1/posts |
 | [003](https://github.com/zoek1211/rest-api-3/tree/003) | 글 단건 조회 GET /api/v1/posts/{id} 와 404 처리 |
 | [004](https://github.com/zoek1211/rest-api-3/tree/004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
+| [005](https://github.com/zoek1211/rest-api-3/tree/005) | 글 수정 PUT /api/v1/posts/{id} |
 
 ## 단계별 진행
 
@@ -194,3 +195,30 @@ return new RsData<>("400-1", msg);
 ```
 
 **배운 점**: AOP(`@Aspect` + `@Around`)는 Bean을 프록시로 감싸 여러 메서드에 공통 동작을 끼워 넣는다(Boot 4 스타터 이름은 `spring-boot-starter-aspectj`) / `@Valid`가 있어야 요청 DTO의 검증 애너테이션이 동작하고, 실패하면 `MethodArgumentNotValidException`이 난다 / JSON 변환 실패(`HttpMessageNotReadableException`)는 검증보다 앞 단계라 코드를 나눠(400-2) 구분한다
+
+### 005: 글 수정 PUT /api/v1/posts/{id}  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/tree/005)
+
+**무엇을 했나**: 정상 수정(200, `"200-1"`, `"1번 글이 수정되었습니다."`, `data: null`, 다시 단건 조회하면 제목·본문이 바뀌고 `modifyDate`가 수정 전과 다름) 테스트를 먼저 써서 실패(핸들러 없음)를 확인하고 통과시켰습니다. 없는 글(404 `"404-1"`)과 빈 제목(400 `"400-1"`, 글은 그대로) 테스트도 추가했는데, 기존 `GlobalExceptionHandler`가 이미 처리해 처음부터 통과했습니다. 요청 DTO는 작성과 같은 규칙의 `PostModifyReqBody`를 따로 두었습니다.
+**왜**: 수정은 `save()` 없이 엔티티 값만 바꾸면 트랜잭션이 끝날 때 JPA가 변경을 감지(dirty checking)해 UPDATE를 보냅니다. 다만 테스트처럼 바깥 트랜잭션에 묶여 커밋이 미뤄지면 `@LastModifiedDate`도 갱신되지 않고, 같은 트랜잭션의 단건 조회는 1차 캐시의 옛 값을 돌려줍니다. 그래서 서비스에서 `flush()`로 UPDATE를 바로 실행해 "수정 API가 끝나면 수정일이 이미 갱신되어 있다"를 보장했습니다.
+**핵심 코드**
+
+```java
+// PostService.java
+@Transactional
+public void modify(long id, String title, String content) {
+    Post post = postRepository.findById(id).orElseThrow(); // 없으면 404
+
+    post.modify(title, content); // 값만 바꾼다. save() 호출 없음 = 변경 감지(dirty checking)
+
+    postRepository.flush(); // UPDATE + @LastModifiedDate 갱신을 지금 실행(커밋은 아님)
+}
+
+// ApiV1PostController.java
+@PutMapping("/{id}")
+public RsData<Void> modify(@PathVariable long id, @RequestBody @Valid PostModifyReqBody reqBody) {
+    postService.modify(id, reqBody.title(), reqBody.content());
+    return new RsData<>("200-1", "%d번 글이 수정되었습니다.".formatted(id)); // data = null
+}
+```
+
+**배운 점**: 영속성 컨텍스트에 있는 엔티티는 값만 바꾸면 flush 시점에 스냅샷과 비교해 UPDATE가 자동으로 나간다(dirty checking, `readOnly` 트랜잭션에서는 안 된다) / `@LastModifiedDate`는 flush 때 채워지므로 커밋이 미뤄지면 응답에 옛 수정일이 보일 수 있다 / PUT은 자원 전체를 바꾸는 요청이라 모든 필드가 필수다

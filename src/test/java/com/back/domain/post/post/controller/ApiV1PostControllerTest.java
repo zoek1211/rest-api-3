@@ -11,6 +11,7 @@ package com.back.domain.post.post.controller;
 // MockMvc: 실제 톰캣 서버를 띄우지 않고, 가짜 HTTP 요청을 DispatcherServlet에 직접 넣어 주는 도구.
 //   네트워크를 타지 않아 빠르지만, 필터·컨트롤러·JSON 변환·예외 처리는 실제와 똑같이 거친다.
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,9 +26,11 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.handler;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -261,5 +264,118 @@ class ApiV1PostControllerTest {
                 .andExpect(jsonPath("$.msg").value("요청 본문이 올바르지 않습니다."))
                 .andExpect(jsonPath("$.data").value(nullValue()))
                 .andExpect(jsonPath("$.length()").value(3));
+    }
+
+    @Test
+    @DisplayName("글 수정: 200 \"1번 글이 수정되었습니다.\", 다시 조회하면 제목·본문이 바뀌고 수정일이 갱신된다")
+    void modify() throws Exception {
+        // 0. 준비: 수정 전 수정일(modifyDate)을 HTTP로 읽어 둔다. 수정 후 값과 비교하기 위해서다.
+        //   JsonPath.read: 응답 JSON 문자열에서 경로 하나의 값을 꺼낸다(jsonPath() 검증과 같은 문법).
+        String oldModifyDate = JsonPath.read(
+                mvc.perform(get("/api/v1/posts/1"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.modifyDate"
+        );
+
+        // 1. 요청 보내기
+        // PUT: 자원 "전체"를 보낸 값으로 바꾼다. 그래서 title, content 둘 다 보낸다.
+        //   (일부 필드만 고치는 PATCH는 spec의 범위 밖이다.)
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "수정된 제목",
+                                            "content": "수정된 내용"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        // 수정은 새로 만든 것이 없으니 201이 아니라 200, 돌려줄 데이터도 없어 data는 null이다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.msg").value("1번 글이 수정되었습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.length()").value(3));
+
+        // 정말 바뀌었는지는 같은 API(단건 조회)로 다시 확인한다.
+        mvc.perform(get("/api/v1/posts/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("수정된 제목"))
+                .andExpect(jsonPath("$.content").value("수정된 내용"))
+                .andExpect(jsonPath("$.modifyDate").value(matchesPattern(DATE_TIME_PATTERN)))
+                .andExpect(jsonPath("$.modifyDate").value(not(oldModifyDate)));
+    }
+
+    @Test
+    @DisplayName("글 수정: 없는 글이면 404 \"404-1\"")
+    void modify_notFound() throws Exception {
+        // 1. 요청 보내기: 본문은 올바르지만 999번 글이 없다
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/999")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "수정된 제목",
+                                            "content": "수정된 내용"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증
+        // 서비스의 findById(...).orElseThrow()가 던진 예외를 GlobalExceptionHandler가 404로 바꾼다(단건 조회와 같은 길).
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-1"))
+                .andExpect(jsonPath("$.msg").value("해당 데이터가 존재하지 않습니다."))
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.length()").value(3));
+    }
+
+    @Test
+    @DisplayName("글 수정: 제목이 비었으면 400 \"400-1\"이고, 글은 바뀌지 않는다")
+    void modify_blankTitle() throws Exception {
+        // 1. 요청 보내기
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "",
+                                            "content": "수정된 내용"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        // 2. 결과 검증: 작성과 같은 검증 규칙이라 같은 msg가 나온다.
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.resultCode").value("400-1"))
+                .andExpect(jsonPath("$.msg").value("""
+                        title-NotBlank-must not be blank
+                        title-Size-size must be between 2 and 100""".stripIndent()))
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.length()").value(3));
+
+        // @Valid에서 막혀 서비스까지 가지 않았으므로, 본문도 옛 값 그대로다.
+        mvc.perform(get("/api/v1/posts/1"))
+                .andExpect(jsonPath("$.title").value("제목 1"))
+                .andExpect(jsonPath("$.content").value("내용 1"));
     }
 }

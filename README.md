@@ -5,7 +5,7 @@
 
 - 스택: Java 25, Spring Boot 4.1, Gradle(Kotlin DSL), Spring Web MVC, Spring Data JPA, Validation, Lombok, H2
 - 용어: [GLOSSARY.md](GLOSSARY.md) / 설계 결정: [docs/adr/](docs/adr/)
-- 레퍼런스: slog.gg "스프링부트, REST API" 강의 (2부 REST API by TDD)
+- 레퍼런스: [스프링부트, REST API 강의 (2부 REST API by TDD)](https://www.slog.gg/p/14172#39강)
 
 ## 실행 방법
 

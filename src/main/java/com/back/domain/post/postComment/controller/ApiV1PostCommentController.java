@@ -1,0 +1,39 @@
+package com.back.domain.post.postComment.controller;
+
+// ApiV1PostCommentController
+// 댓글(PostComment) API의 입구. 요청 흐름: HTTP 요청 → DispatcherServlet → "컨트롤러" → PostService → 저장소 → DB.
+//
+// URL이 /api/v1/posts/{postId}/comments인 이유: 댓글은 글 없이 존재할 수 없는 "글의 하위 자원"이다.
+//   REST에서는 이런 소속 관계를 경로의 중첩으로 표현한다("1번 글의 댓글들").
+//   /api/v1/comments?postId=1 같은 평평한 URL도 가능하지만, 소속이 필수인 자원이라 중첩이 더 자연스럽다.
+// 글 컨트롤러와 나눈 이유: 자원(글/댓글)마다 컨트롤러 하나. 댓글 엔드포인트 5개가 모두 이 파일에 모인다.
+
+import com.back.domain.post.post.service.PostService;
+import com.back.domain.post.postComment.dto.PostCommentDto;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@RestController
+// 클래스 수준 경로에도 {postId} 같은 경로 변수를 쓸 수 있다. 각 메서드에서 @PathVariable로 받는다.
+@RequestMapping("/api/v1/posts/{postId}/comments")
+@RequiredArgsConstructor
+public class ApiV1PostCommentController {
+
+    private final PostService postService;
+
+    // GET /api/v1/posts/{postId}/comments: 댓글 다건 조회(최신순).
+    // ADR 0001: 조회는 RsData로 감싸지 않고 DTO 배열 그대로. 댓글이 없으면 빈 배열 [] (200).
+    // 없는 글이면 서비스가 NoSuchElementException → GlobalExceptionHandler가 404("404-1").
+    @GetMapping
+    public List<PostCommentDto> getItems(@PathVariable long postId) {
+        return postService.findCommentsByPostIdOrderByIdDesc(postId)
+                .stream()
+                .map(PostCommentDto::new) // 엔티티 → DTO
+                .toList();
+    }
+}

@@ -33,6 +33,7 @@ JDBC URL에 `jdbc:h2:./db_dev;MODE=MySQL`, User Name에 `sa`, 비밀번호는 �
 | [004](https://github.com/zoek1211/rest-api-3/tree/004) | 글 작성 POST /api/v1/posts 와 입력값 검증 |
 | [005](https://github.com/zoek1211/rest-api-3/tree/005) | 글 수정 PUT /api/v1/posts/{id} |
 | [006](https://github.com/zoek1211/rest-api-3/tree/006) | 글 삭제 DELETE /api/v1/posts/{id} |
+| [007](https://github.com/zoek1211/rest-api-3/tree/007) | 댓글 다건 조회 GET /api/v1/posts/{postId}/comments |
 
 ## 단계별 진행
 
@@ -250,3 +251,35 @@ public RsData<Void> delete(@PathVariable long id) {
 ```
 
 **배운 점**: `cascade = REMOVE`가 있으면 부모를 지울 때 JPA가 자식 DELETE를 먼저 보낸다(없으면 FK 제약 위반) / 쓰기 결과는 DB를 직접 보지 않고 같은 API(단건 조회 404)로 확인한다 / DELETE는 멱등이다: 두 번째 요청은 404지만 "글이 없다"는 서버 상태는 같다
+
+### 007: 댓글 다건 조회 GET /api/v1/posts/{postId}/comments  ·  [코드 보기](https://github.com/zoek1211/rest-api-3/commit/007)
+
+**무엇을 했나**: 두 번째 테스트 클래스 `ApiV1PostCommentControllerTest`를 만들고, 1번 글의 댓글 3개가 id 내림차순으로 모든 필드(`postId`는 1)와 함께 온다는 테스트를 먼저 써서 실패(빈 컨트롤러라 핸들러가 `ResourceHttpRequestHandler`)를 확인한 뒤 `PostCommentDto`, `ApiV1PostCommentController`, `PostService.findCommentsByPostIdOrderByIdDesc`로 통과시켰습니다. 댓글 없는 3번 글은 빈 배열, 없는 글은 404라는 테스트도 추가했습니다(구현이 이미 처리해서 바로 통과).
+**왜**: 댓글은 글의 하위 자원이라 URL을 `/posts/{postId}/comments`로 중첩하고, 글을 먼저 찾아(`orElseThrow`, 없으면 404) 그 글의 댓글을 꺼냅니다. `open-in-view: false`라서 LAZY인 `post.comments`는 서비스 트랜잭션 안에서 `toList()`로 읽어 둬야 하고, `@OrderBy`가 없어 순서는 직접 id 내림차순으로 정렬합니다. 응답에는 `Post` 객체 대신 `postId` 숫자만 넣어 순환 참조를 끊습니다.
+**핵심 코드**
+
+```java
+// PostService.java
+@Transactional(readOnly = true)
+public List<PostComment> findCommentsByPostIdOrderByIdDesc(long postId) {
+    Post post = postRepository.findById(postId).orElseThrow(); // 없는 글이면 404, 댓글 0개면 빈 목록
+
+    return post.getComments()                                  // LAZY 컬렉션: 트랜잭션 안에서 읽어 둔다
+            .stream()
+            .sorted(Comparator.comparing(PostComment::getId).reversed()) // 최신순
+            .toList();
+}
+
+// ApiV1PostCommentController.java
+@RestController
+@RequestMapping("/api/v1/posts/{postId}/comments")
+public class ApiV1PostCommentController {
+    @GetMapping
+    public List<PostCommentDto> getItems(@PathVariable long postId) {
+        return postService.findCommentsByPostIdOrderByIdDesc(postId)
+                .stream().map(PostCommentDto::new).toList();
+    }
+}
+```
+
+**배운 점**: 소속이 필수인 자원은 경로를 중첩해 표현한다(`/posts/{postId}/comments`) / "없는 글"(404)과 "댓글 없는 글"(200 + `[]`)은 다르다 / LAZY 연관의 프록시는 `getId()`만으로는 SELECT를 하지 않지만, 컬렉션은 트랜잭션 밖에서 처음 읽으면 `LazyInitializationException`이 난다

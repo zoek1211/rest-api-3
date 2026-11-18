@@ -9,11 +9,13 @@ package com.back.domain.post.post.service;
 
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.repository.PostRepository;
+import com.back.domain.post.postComment.entity.PostComment;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -43,6 +45,25 @@ public class PostService {
         // 왜 null을 반환하지 않나: 호출하는 쪽마다 null 검사를 해야 하고, 빠뜨리면 엉뚱한 곳에서
         //   NullPointerException이 난다. 예외를 던지면 GlobalExceptionHandler 한 곳에서 404로 바꿀 수 있다.
         return postRepository.findById(id).orElseThrow();
+    }
+
+    // 글의 댓글 목록(최신순). 없는 글이면 NoSuchElementException → GlobalExceptionHandler가 404로 바꾼다.
+    // 왜 댓글 서비스를 따로 만들지 않고 여기 두나: 댓글은 "글에 속한 것"이라 항상 글을 먼저 찾고 거기서 꺼낸다.
+    //   댓글 전용 저장소(PostCommentRepository)도 아직 없다. 댓글 로직이 커지면 그때 나눈다.
+    @Transactional(readOnly = true)
+    public List<PostComment> findCommentsByPostIdOrderByIdDesc(long postId) {
+        // 글이 없으면 여기서 404. 댓글이 0개인 글은 "빈 목록"이지 404가 아니다(3번 글).
+        Post post = postRepository.findById(postId).orElseThrow();
+
+        // 주의: post.getComments()는 LAZY 컬렉션이다. 트랜잭션 안(이 메서드 안)에서 실제로 읽어 둬야 한다.
+        //   open-in-view가 false라서, 컬렉션을 그대로 컨트롤러에 넘기고 거기서 처음 읽으면
+        //   트랜잭션이 이미 끝나 LazyInitializationException이 난다. stream().toList()가 여기서 SELECT를 실행해
+        //   평범한 List로 복사해 준다.
+        // 정렬: comments 컬렉션은 @OrderBy가 없어 DB가 주는 순서를 보장하지 않는다. 그래서 id 내림차순으로 직접 정렬한다.
+        return post.getComments()
+                .stream()
+                .sorted(Comparator.comparing(PostComment::getId).reversed())
+                .toList();
     }
 
     // 쓰기 메서드라 readOnly 없이 @Transactional. 메서드가 끝나면 커밋(예외가 나면 롤백)된다.
